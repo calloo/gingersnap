@@ -10,9 +10,9 @@ export interface ParserMap {
 export const parse = R.curry((mapping: ParserMap, data: any) => {
   if (typeof data === "string") {
     return mapping.string(data);
-  } else if (mapping.supportArray && data instanceof Array) {
+  } else if (mapping.supportArray && (Array.isArray(data) || data instanceof Array)) {
     return data.map((v) => parse(mapping, v));
-  } else if (!(data instanceof Array) && typeof data === "object") {
+  } else if (!(Array.isArray(data) || data instanceof Array) && typeof data === "object") {
     return mapping.object(data);
   }
   return mapping.default(data);

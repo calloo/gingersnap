@@ -128,10 +128,12 @@ export class Model {
       case DataFormat.MESSAGE_PACK: {
         const decoder = msgUnpack;
         const result = decoder(data);
-        if (options?.array && !(result instanceof Array)) throw new ParsingError([], "expected an array of models");
-        if (!options?.array && result instanceof Array) throw new ParsingError([], "expected only one model");
+        if (options?.array && !(result instanceof Array || Array.isArray(result)))
+          throw new ParsingError([], "expected an array of models");
+        if ((!options?.array && result instanceof Array) || Array.isArray(result))
+          throw new ParsingError([], "expected only one model");
 
-        if (result instanceof Array) return result.map((v: any) => this.fromJSON<T>(v));
+        if (result instanceof Array || Array.isArray(result)) return result.map((v: any) => this.fromJSON<T>(v));
         return this.fromJSON<T>(result as any);
       }
       case DataFormat.CSV: {
@@ -261,7 +263,7 @@ export class Model {
     const serialize = (value: any) => {
       if (value instanceof Model) {
         return value.object(removeMissingFields);
-      } else if (value instanceof Array) {
+      } else if (value instanceof Array || Array.isArray(value)) {
         return value.map((v) => serialize(v));
       } else if (value instanceof Set) {
         return Array.from(value);
@@ -397,7 +399,7 @@ export class Model {
    * @private
    */
   private static fromObject<T extends Model>(data: Object, format: DataFormat = DataFormat.JSON): T {
-    if (data instanceof Array || typeof data !== "object") {
+    if (data instanceof Array || Array.isArray(data) || typeof data !== "object") {
       throw new ParsingError([], "Invalid data provided. Must be an object");
     }
 
@@ -461,7 +463,7 @@ export class Model {
         });
         const result = parser(value);
 
-        if (result instanceof Array) {
+        if (result instanceof Array || Array.isArray(result)) {
           throw new ParsingError([], `value for ${key} expected to be serializable object, not an array`);
         }
         model[key] = processValue(fieldProps, result);
@@ -476,10 +478,10 @@ export class Model {
 
         try {
           const data = new Map(
-            (!(value instanceof Array) && typeof value === "object" ? Object.entries(value) : value).map(([k, v]) => [
-              fieldProps.KeyType(k),
-              v,
-            ])
+            (!(value instanceof Array || Array.isArray(value)) && typeof value === "object"
+              ? Object.entries(value)
+              : value
+            ).map(([k, v]) => [fieldProps.KeyType(k), v])
           );
           data.forEach((value, key) => {
             data.set(key, parser(value));
@@ -492,10 +494,10 @@ export class Model {
       } else if (fieldProps.isMap) {
         try {
           const data = new Map(
-            (!(value instanceof Array) && typeof value === "object" ? Object.entries(value) : value).map(([k, v]) => [
-              fieldProps.KeyType(k),
-              v,
-            ])
+            (!(value instanceof Array || Array.isArray(value)) && typeof value === "object"
+              ? Object.entries(value)
+              : value
+            ).map(([k, v]) => [fieldProps.KeyType(k), v])
           );
           model[key] = processValue(fieldProps, data);
           data.forEach((value, key) => {
@@ -513,7 +515,7 @@ export class Model {
             throw new ParsingError([], e?.message ?? String(e));
           }
         }
-        if (!(value instanceof Array)) {
+        if (!(value instanceof Array || Array.isArray(value))) {
           throw new ParsingError([], `value for ${key} is expected to be an Array, instead received ${typeof value}`);
         }
 
@@ -558,7 +560,7 @@ export class Model {
             try {
               model[key] = processValue(
                 fieldProps,
-                value instanceof Array ? new Map(value) : new Map(Object.entries(value))
+                value instanceof Array || Array.isArray(value) ? new Map(value) : new Map(Object.entries(value))
               );
             } catch (e: any) {
               throw new ParsingError([], e?.message ?? String(e));
@@ -570,7 +572,7 @@ export class Model {
               value = JSON.parse(value);
               model[key] = processValue(
                 fieldProps,
-                value instanceof Array ? new Map(value) : new Map(Object.entries(value))
+                value instanceof Array || Array.isArray(value) ? new Map(value) : new Map(Object.entries(value))
               );
             } catch (e: any) {
               throw new ParsingError([], e?.message ?? String(e));
@@ -580,7 +582,7 @@ export class Model {
             throw new ParsingError([value], `value for ${key} cannot be converted to a Map`);
         }
       } else if (fieldProps.Type?.name === "Set") {
-        if (value instanceof Array) {
+        if (value instanceof Array || Array.isArray(value)) {
           model[key] = processValue(fieldProps, new Set(value));
         } else if (typeof value === "string") {
           model[key] = processValue(fieldProps, new Set(JSON.parse(value)));

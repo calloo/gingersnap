@@ -99,7 +99,7 @@ export class NetworkService {
   private convertToJSON(value: any): string {
     if (value instanceof Model) {
       return value.json();
-    } else if (value instanceof Array) {
+    } else if (value instanceof Array || Array.isArray(value)) {
       return `[${value.map((v) => this.convertToJSON(v))}]`;
     }
     return typeof value === "string" ? value : JSON.stringify(value);

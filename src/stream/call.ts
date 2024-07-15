@@ -63,9 +63,9 @@ export class Callable<
     }
     const Class = this.ModelClass as typeof Model;
 
-    if (json instanceof Array && this.arrayResponseSupport) {
+    if ((json instanceof Array || Array.isArray(json)) && this.arrayResponseSupport) {
       return json.map((v) => Class.fromJSON<any>(v)) as T;
-    } else if (!(json instanceof Array) && !this.arrayResponseSupport) {
+    } else if (!(json instanceof Array || Array.isArray(json)) && !this.arrayResponseSupport) {
       return Class.fromJSON<any>(json);
     }
 

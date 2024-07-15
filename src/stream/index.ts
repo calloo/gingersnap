@@ -587,7 +587,8 @@ export class Stream<T> implements AsyncGenerator<T> {
     this.actions.push({
       type: ActionType.UNPACK,
       functor: (value) => {
-        if (value instanceof Array || value instanceof Set) return R.flatten(value as any[]) as any;
+        if (value instanceof Array || Array.isArray(value) || value instanceof Set)
+          return R.flatten(value as any[]) as any;
         return [value] as any;
       },
     });

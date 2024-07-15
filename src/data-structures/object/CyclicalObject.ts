@@ -41,7 +41,7 @@ export class CyclicalObject<T, K> {
       for (const [k, v] of data.entries()) {
         obj.set(k, v);
       }
-    } else if (data instanceof Array) {
+    } else if (data instanceof Array || Array.isArray(data)) {
       for (const [k, v] of data) {
         obj.set(k, v);
       }
