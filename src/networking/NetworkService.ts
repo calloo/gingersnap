@@ -178,7 +178,7 @@ export class NetworkService {
 
             return lookup()
               .thenApply(({ value }) => {
-                if (cacheDuration) {
+                if (cacheDuration && value.ok) {
                   let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
                   if (body) {
                     key += hash(body);
