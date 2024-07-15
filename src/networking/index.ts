@@ -47,6 +47,7 @@ export {
   XMLResponse,
   JSONResponse,
   BaseUrl,
+  Cached,
 } from "./decorators";
 export { ReplyStreamDirection, MapOfHeaders, ParamHeaders, MapOfQueries, MapOfPath, NONE, PASS } from "./types";
 export * from "./http";
