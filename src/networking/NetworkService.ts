@@ -7,6 +7,8 @@ import { GingerSnapProps } from "./index";
 import { HTTPStatus, THROTTLE_DEFAULT_MS } from "./decorators";
 import { request } from "./request";
 import { Future } from "../future";
+import { TimeableObject } from "../data-structures/object";
+import hash from "object-hash";
 
 type CredentialFunctorWithArg = (credentials: Credentials) => Call<Credentials> | Promise<Credentials> | Credentials;
 type CredentialFunctor = () => Call<Credentials> | Promise<Credentials> | Credentials;
@@ -76,10 +78,17 @@ export class NetworkService {
    */
   protected context: any;
 
+  /**
+   * Cache containing the results from cached network lookups
+   * @protected
+   */
+  protected lookupCache: TimeableObject<string, any>;
+
   constructor({ baseUrl, retryLimit }: GingerSnapProps = {}) {
     this.retryLimit = retryLimit;
     this.__internal__ = this.__internal__ ?? { classConfig: {}, methodConfig: {} };
     this.baseUrl = this.__internal__.classConfig.baseUrl ?? baseUrl ?? "";
+    this.lookupCache = new TimeableObject<string, any>();
   }
 
   /**
@@ -115,6 +124,7 @@ export class NetworkService {
       }
 
       const requestType: RequestType = value.requestType;
+      const cacheDuration = value.cache;
 
       self[key] = (...args: any[]) => {
         let url = new URL(
@@ -128,6 +138,19 @@ export class NetworkService {
             headers = result.headers;
             url = result.url;
             const body = result.body;
+
+            if (cacheDuration) {
+              let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
+              if (body) {
+                key += hash(body);
+              }
+              const result = this.lookupCache.get(key);
+
+              if (result) {
+                return result.clone();
+              }
+            }
+
             const lookup = (retries = 0) =>
               request(url, { headers, method: requestType.toString(), body }).thenApply(async ({ value: resp }) => {
                 let credentials: Credentials | undefined;
@@ -153,7 +176,18 @@ export class NetworkService {
                 return resp;
               });
 
-            return lookup().registerSignal(signal);
+            return lookup()
+              .thenApply(({ value }) => {
+                if (cacheDuration) {
+                  let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
+                  if (body) {
+                    key += hash(body);
+                  }
+                  this.lookupCache.set(key, value.clone(), cacheDuration);
+                }
+                return value;
+              })
+              .registerSignal(signal);
           },
           oldMethod,
           value.responseClass,

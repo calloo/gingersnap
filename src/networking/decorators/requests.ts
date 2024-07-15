@@ -1,6 +1,7 @@
 import * as R from "ramda";
 import { createProps } from "./options";
 import { RequestType } from "../types";
+import { WaitPeriod } from "../../future";
 
 /// //// Helpers ///////
 const createRequestDecorator = (type: RequestType) => (path: string) => (target: any, propertyKey: string) => {
@@ -45,3 +46,9 @@ export const OPTIONS = createRequestDecorator(RequestType.OPTIONS);
  * Marks method as a HEAD request
  */
 export const HEAD = createRequestDecorator(RequestType.HEAD);
+
+export const Cached = (duration: WaitPeriod) => (target: any, propertyKey: string) => {
+  const proto = createProps(target.constructor);
+  const cacheLens = R.lensPath(["methodConfig", propertyKey, "cache"]);
+  proto.__internal__ = R.set(cacheLens, duration, proto.__internal__);
+};

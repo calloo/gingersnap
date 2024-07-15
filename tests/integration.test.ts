@@ -236,6 +236,19 @@ describe("Test Network Service", function () {
     expect(resp).toEqual("Ok");
   });
 
+  it("should cache response for given duration", async () => {
+    (global.fetch as any) = async (url: string, options: any) => new Response(String(Math.random()));
+
+    const snap = new GingerSnap({ baseUrl: "https://test.com" });
+    const service = snap.create(UtilService);
+    const resp: string = await service.randomNumCheck().execute();
+    const resp2: string = await service.randomNumCheck().execute();
+
+    expect(resp).toEqual(resp2);
+    await Future.sleep({ seconds: 2 });
+    expect(resp).not.toEqual(await service.randomNumCheck().execute());
+  });
+
   it("should get binary data response", async () => {
     (global.fetch as any) = async (url: string, options: any) => new Response("Ok");
 

@@ -22,6 +22,7 @@ import {
 import { User } from "./user";
 import { BasicCredentials } from "../../src/data/model";
 import { Call } from "../../src/stream/call";
+import { Cached } from "../../src/networking/decorators";
 
 @BaseUrl("https://test.com")
 export class UtilService extends NetworkService {
@@ -40,6 +41,13 @@ export class UtilService extends NetworkService {
   @GET("/heath")
   @StringResponse
   public healthCheck(): Call<string> {
+    return PASS;
+  }
+
+  @Cached({ seconds: 2 })
+  @GET("/random")
+  @StringResponse
+  public randomNumCheck(): Call<string> {
     return PASS;
   }
 
