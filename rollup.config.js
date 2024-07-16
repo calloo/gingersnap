@@ -33,11 +33,15 @@ export default (options) => {
       {
         dir: "./lib",
         format: "es",
+        preserveModules: true,
+        preserveModulesRoot: "src",
         entryFileNames: "[name].mjs",
       },
       {
         dir: "./lib",
         format: "cjs",
+        preserveModules: true,
+        preserveModulesRoot: "src",
         entryFileNames: "[name].cjs",
       },
     ],

@@ -190,7 +190,9 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Converts the provided value to a stream
    * @param value
    */
-  static of<K>(value: Iterable<K> | AsyncGenerator<K> | AsyncGeneratorFunction | Future<K>): Stream<K> {
+  static of<K>(
+    value: Iterable<K> | AsyncGenerator<K> | AsyncGeneratorFunction | Future<K> | ReadableStream<K>
+  ): Stream<K> {
     if (value[Symbol.iterator]) {
       const iterator = value[Symbol.iterator]();
       return new Stream<K>((signal) => {

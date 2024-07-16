@@ -1,6 +1,6 @@
 {
   "name": "@cookienerds/gingersnap",
-  "version": "0.14.3",
+  "version": "0.15.0",
   "description": "library for handling data locally and over the network",
   "main": "index.js",
   "scripts": {
