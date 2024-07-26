@@ -1,4 +1,4 @@
-import { CallExecutionError, FutureError, StreamEnded } from "../errors";
+import { CallExecutionError, FutureCancelled, FutureError, StreamEnded } from "../errors";
 import * as R from "ramda";
 import { AnyDataType, Flattened, InferErrorResult, InferStreamResult } from "../typing/types";
 import { Future, FutureResult, WaitPeriod } from "../future";
@@ -688,20 +688,22 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Runs the stream only once. After this call, the stream is closed
    */
   execute(): Future<T> {
-    return this.runLock.with(async ({ signal }) => {
-      if (this.executed) throw new CallExecutionError("Cannot rerun a one time stream");
-      while (true) {
-        const { state, value } = await (this.sourceStream && this.concurrencyLimit
-          ? this.forwardExecute().registerSignal(signal)
-          : this.__execute__().registerSignal(signal));
+    return this.runLock
+      .with(async ({ signal }) => {
+        if (this.executed) throw new CallExecutionError("Cannot rerun a one time stream");
+        while (true) {
+          const { state, value } = await (this.sourceStream && this.concurrencyLimit
+            ? this.forwardExecute().registerSignal(signal)
+            : this.__execute__().registerSignal(signal));
 
-        if (state !== State.CONTINUE) {
-          this.done = true;
-          this.invokeCompletionHooks();
-          return value as T;
+          if (state !== State.CONTINUE) {
+            this.done = true;
+            this.invokeCompletionHooks();
+            return value as T;
+          }
         }
-      }
-    }) as Future<T>;
+      })
+      .schedule() as Future<T>;
   }
 
   join(): Stream<T> {
@@ -959,7 +961,7 @@ export class Stream<T> implements AsyncGenerator<T> {
         return { done: true, value: undefined };
       } catch (error) {
         this.invokeCompletionHooks();
-        if (error instanceof StreamEnded) return { done: true, value: null };
+        if (error instanceof StreamEnded || error instanceof FutureCancelled) return { done: true, value: null };
         throw error;
       }
     });

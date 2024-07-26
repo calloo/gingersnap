@@ -1,6 +1,6 @@
 {
   "name": "@cookienerds/gingersnap",
-  "version": "0.15.3",
+  "version": "0.16.0",
   "description": "library for handling data locally and over the network",
   "main": "index.js",
   "scripts": {
@@ -27,7 +27,6 @@
   "homepage": "https://gitlab.com/cookienerd-frameworks/gingersnap#readme",
   "devDependencies": {
     "@mxssfd/typedoc-theme": "^1.0.3",
-    "@rollup/plugin-typescript": "^11.1.2",
     "@types/jest": "^29.2.4",
     "@types/node": "^18.11.17",
     "@types/object-hash": "^3.0.6",
@@ -51,8 +50,7 @@
     "mock-socket": "^9.3.1",
     "node-polyfill-webpack-plugin": "^2.0.1",
     "rollup": "^3.26.0",
-    "rollup-plugin-delete": "^2.0.0",
-    "rollup-plugin-dts": "^6.1.0",
+    "rollup-plugin-typescript2": "^0.36.0",
     "ts-jest": "^29.0.3",
     "ts-loader": "^9.4.2",
     "typedoc": "^0.23.21",

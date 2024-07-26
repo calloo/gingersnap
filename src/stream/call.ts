@@ -1,8 +1,9 @@
 import { NONE, ResponseType, ThrottleByProps } from "../networking/types";
 import { CallExecutionError, MissingArgumentsError } from "../errors";
 import { DataFormat, Model } from "../data/model";
-import { Executor, State, Stream } from "./index";
+import { Executor, Stream } from "./index";
 import { ExecutorState } from "./state";
+import { Future } from "../future";
 
 /**
  * Abstract Callable class with generic processing functionalities
@@ -163,36 +164,38 @@ export class Call<T extends Model | Model[] | String | string | string[] | Blob 
     return newStream;
   }
 
-  public async execute(rawResponse = false): Promise<T> {
-    if (this.throttle && this.executingCallback) this.cancel();
-    this.executingCallback = true;
+  public execute(rawResponse = false): Future<T> {
+    return Future.of<T>(async (resolve, reject, signal) => {
+      if (this.throttle && this.executingCallback) this.cancel();
+      this.executingCallback = true;
 
-    if (this.throttle?.waitPeriodInMs) {
-      await new Promise((resolve) => setTimeout(resolve, this.throttle?.waitPeriodInMs));
-    }
-    const resp = (await super.execute()) as unknown as Response;
-    this.executingCallback = false;
+      if (this.throttle?.waitPeriodInMs) {
+        await Future.sleep({ milliseconds: this.throttle.waitPeriodInMs }, signal);
+      }
+      const resp = (await super.execute().registerSignal(signal)) as unknown as Response;
+      this.executingCallback = false;
 
-    if (!resp) return resp;
-    if (!(resp instanceof Response)) return resp;
-    if (!resp.ok) {
-      throw new CallExecutionError(`Received response status code of ${resp.status}`, resp);
-    }
-    const response = rawResponse
-      ? ((await resp.blob()) as T)
-      : await this.__process_response__(resp, this.responseType);
-    let callbackResponse = this.callback?.bind({ context: response })();
-    if (callbackResponse instanceof Promise) {
-      callbackResponse = await callbackResponse;
-    } else if (callbackResponse instanceof Callable) {
-      callbackResponse = await callbackResponse.execute();
-    }
-    if (callbackResponse) return callbackResponse as T;
-    return response;
+      if (!resp) return resp;
+      if (!(resp instanceof Response)) return resolve(resp);
+      if (!resp.ok) {
+        return reject(new CallExecutionError(`Received response status code of ${resp.status}`, resp));
+      }
+      const response = rawResponse
+        ? ((await resp.blob()) as T)
+        : await this.__process_response__(resp, this.responseType);
+      let callbackResponse = this.callback?.bind({ context: response })();
+      if (callbackResponse instanceof Promise) {
+        callbackResponse = await callbackResponse;
+      } else if (callbackResponse instanceof Callable) {
+        callbackResponse = await callbackResponse.execute().registerSignal(signal);
+      }
+      if (callbackResponse) return resolve(callbackResponse as T);
+      resolve(response);
+    }).schedule();
   }
 
-  protected async __execute__(): Promise<{ state: State; value?: T }> {
+  protected __execute__() {
     const preprocessor = (v) => (v instanceof Response ? this.__process_response__(v, this.responseType) : v);
-    return await super.__execute__(preprocessor as any);
+    return super.__execute__(preprocessor as any);
   }
 }
