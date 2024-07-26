@@ -30,19 +30,19 @@ describe("DataBus", () => {
       .map((v) => v.data)
       .take(2)
       .collect(Collectors.asList())
-      .run();
+      .schedule();
     const response2 = reportObserver
       .subscribe("testing")
       .map((v) => v.data)
       .take(3)
       .collect(Collectors.asList())
-      .run();
+      .schedule();
     const response3 = foodObserver
       .subscribe("*")
       .map((v) => v.data)
       .take(3)
       .collect(Collectors.asList())
-      .run();
+      .schedule();
 
     await Future.sleep({ seconds: 1 });
     bus.publish("*.testing", "message");
@@ -61,13 +61,13 @@ describe("DataBus", () => {
       .map((v) => v.data)
       .take(2)
       .collect(Collectors.asList())
-      .run();
+      .schedule();
     const response2 = bus
       .subscribe("[jobs,reports].testing")
       .map((v) => v.data)
       .take(2)
       .collect(Collectors.asList())
-      .run();
+      .schedule();
     const response3 = bus
       .subscribe("jobs.testing")
       .map((v) => v.data)
