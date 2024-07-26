@@ -5,6 +5,8 @@ import { Future, FutureResult, WaitPeriod } from "../future";
 import { TimeableObject } from "../data-structures/object/TimeableObject";
 import { ExecutorState } from "./state";
 import { Collector } from "./collector";
+import { Lock } from "../synchronize";
+import { IllegalOperationError } from "../errors/IllegalOperationError";
 
 enum ActionType {
   TRANSFORM,
@@ -49,6 +51,8 @@ export class Stream<T> implements AsyncGenerator<T> {
 
   private canRunExecutor: boolean;
 
+  private readonly runLock: Lock;
+
   /**
    * AbortController used to cancel http request created by the callback
    * @private
@@ -62,6 +66,10 @@ export class Stream<T> implements AsyncGenerator<T> {
    */
   protected executor: Executor;
 
+  private concurrencyLimit: number;
+
+  private sourceStream?: Stream<T>;
+
   constructor(executor: Executor) {
     this.executor = executor;
     this.controller = new AbortController();
@@ -73,6 +81,8 @@ export class Stream<T> implements AsyncGenerator<T> {
     this.cancelHooks = new Set();
     this.completionHooks = new Set();
     this.completionHookInvoked = false;
+    this.runLock = new Lock();
+    this.concurrencyLimit = 0;
   }
 
   /**
@@ -191,7 +201,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * @param value
    */
   static of<K>(
-    value: Iterable<K> | AsyncGenerator<K> | AsyncGeneratorFunction | Future<K> | ReadableStream<K>
+    value: AsyncIterable<K> | Iterable<K> | AsyncGenerator<K> | AsyncGeneratorFunction | Future<K> | ReadableStream<K>
   ): Stream<K> {
     if (value[Symbol.iterator]) {
       const iterator = value[Symbol.iterator]();
@@ -249,6 +259,21 @@ export class Stream<T> implements AsyncGenerator<T> {
           .catch(reject);
       }
     });
+  }
+
+  parallel(concurrentlyLimit: number = 3) {
+    if (concurrentlyLimit < 1) {
+      throw new IllegalOperationError("Cannot start parallel stream less than 2");
+    }
+    const newStream = new Stream<T>(() => {});
+    newStream.concurrencyLimit = concurrentlyLimit;
+    newStream.sourceStream = this as any;
+    newStream.executed = this.executed;
+    newStream.done = this.done;
+    newStream.cancelHooks = new Set(this.cancelHooks);
+    newStream.completionHooks = new Set(this.completionHooks);
+    newStream.completionHookInvoked = this.completionHookInvoked;
+    return newStream;
   }
 
   /**
@@ -418,6 +443,8 @@ export class Stream<T> implements AsyncGenerator<T> {
    */
   clone(withSignals?: boolean): Stream<T> {
     const newStream = new Stream<T>(this.executor);
+    newStream.concurrencyLimit = this.concurrencyLimit;
+    newStream.sourceStream = this.sourceStream;
     newStream.actions = [...this.actions];
     newStream.executed = this.executed;
     newStream.done = this.done;
@@ -459,17 +486,16 @@ export class Stream<T> implements AsyncGenerator<T> {
   public cancel(reason?: any): void {
     this.controller.abort(reason);
     this.invokeCompletionHooks();
-    this.cancelHooks.forEach(
-      (handler) =>
-        new Promise((resolve, reject) => {
-          try {
-            handler();
-            resolve(null);
-          } catch (e) {
-            reject(e);
-          }
-        })
-    );
+    this.cancelHooks.forEach((handler) => {
+      void new Promise((resolve, reject) => {
+        try {
+          handler();
+          resolve(null);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
   }
 
   /**
@@ -614,7 +640,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Consumes the entire stream and store the data in an array
    */
   collect<K>(collector: Collector<K, T>): Future<K> {
-    return collector(this);
+    return collector(this.isParallel ? this.join() : this);
   }
 
   /**
@@ -645,60 +671,80 @@ export class Stream<T> implements AsyncGenerator<T> {
     });
   }
 
+  forEach(callback: (v: T) => void): Future<void> {
+    return new Future<void>(async (resolve, reject) => {
+      try {
+        for await (const value of this) {
+          callback(value);
+        }
+        resolve();
+      } catch (error: any) {
+        reject(error instanceof FutureError ? error : new FutureError(error?.message ?? "Unknown"));
+      }
+    });
+  }
+
   /**
    * Runs the stream only once. After this call, the stream is closed
    */
-  async execute(): Promise<T> {
-    if (this.executed) throw new CallExecutionError("Cannot rerun a one time stream");
-    while (true) {
-      const { state, value } = await this.__execute__();
+  execute(): Future<T> {
+    return this.runLock.with(async ({ signal }) => {
+      if (this.executed) throw new CallExecutionError("Cannot rerun a one time stream");
+      while (true) {
+        const { state, value } = await (this.sourceStream && this.concurrencyLimit
+          ? this.forwardExecute().registerSignal(signal)
+          : this.__execute__().registerSignal(signal));
 
-      if (state !== State.CONTINUE) {
-        this.done = true;
-        this.invokeCompletionHooks();
-        return value as T;
+        if (state !== State.CONTINUE) {
+          this.done = true;
+          this.invokeCompletionHooks();
+          return value as T;
+        }
       }
+    }) as Future<T>;
+  }
+
+  join(): Stream<T> {
+    if (!this.concurrencyLimit || !this.sourceStream) {
+      throw new IllegalOperationError("Join can only be called on a parallel stream");
     }
+    return Stream.of(this.internalIterator()).flatten() as Stream<T>;
+  }
+
+  get isParallel() {
+    return this.concurrencyLimit && this.sourceStream;
   }
 
   [Symbol.asyncIterator](): AsyncGenerator<T, any, unknown> {
-    return this;
+    return this.isParallel ? this.join() : this;
   }
 
-  async next(...args: [] | [unknown]): Promise<IteratorResult<T, any>> {
-    try {
-      while (!this.done) {
-        const { state, value } = await this.__execute__();
-        if (state === State.MATCHED && value !== undefined) return { done: false, value };
-        if (state === State.DONE) {
-          this.done = true;
-          this.invokeCompletionHooks();
-          if (value !== undefined) return { done: false, value };
-        }
-        if (this.controller.signal.aborted) {
-          this.invokeCompletionHooks();
-          this.done = true;
-        }
-      }
-      return { done: true, value: undefined };
-    } catch (error) {
-      if (error instanceof StreamEnded) return { done: true, value: null };
-      throw error;
+  private internalIterator(): AsyncGenerator<T, any, unknown> {
+    const iterator = {
+      next: () => this.internalNext().run(),
+      return: this.return.bind(this),
+      throw: this.throw,
+      [Symbol.asyncIterator](): AsyncGenerator<T, any, unknown> {
+        return iterator;
+      },
+    };
+    return iterator;
+  }
+
+  next(...args: [] | [unknown]): Promise<IteratorResult<T, any>> {
+    if (this.concurrencyLimit || this.sourceStream) {
+      throw new IllegalOperationError("Iterator cannot be called on a parallel stream.Please join first");
     }
+    return this.internalNext().run();
   }
 
   return(value: any): Promise<IteratorResult<T, any>>;
   return(value?: any): Promise<IteratorResult<T, any>>;
   async return(value?: any): Promise<IteratorResult<T, any>> {
-    try {
-      while (true) {
-        const { state, value } = await this.__execute__();
-        if (state !== State.CONTINUE) return { done: true, value };
-      }
-    } catch (error) {
-      if (error instanceof StreamEnded) return { done: true, value: null };
-      throw error;
+    if (this.concurrencyLimit || this.sourceStream) {
+      throw new IllegalOperationError("Iterator cannot be called on a parallel stream.Please join first");
     }
+    return { done: true, value: await this.execute().run() };
   }
 
   throw(e: any): Promise<IteratorResult<T, any>>;
@@ -710,160 +756,213 @@ export class Stream<T> implements AsyncGenerator<T> {
     };
   }
 
-  private async checkBacklog(): Promise<{ index: number; data?: any }> {
-    if (this.backlog.length === 0) return { index: -1 };
+  private checkBacklog(signal: AbortSignal): Future<{ index: number; data?: any }> {
+    return Future.of(async (resolve, __, signal) => {
+      if (this.backlog.length === 0) return resolve({ index: -1 });
 
-    const { actionStream, records } = this.backlog[0];
-    const index = actionStream;
-    if (records instanceof Stream) {
-      const { value: data, done } = await records[Symbol.asyncIterator]().next();
-      if (done) {
-        this.backlog.shift();
-        return await this.checkBacklog();
+      const { actionStream, records } = this.backlog[0];
+      const index = actionStream;
+      if (records instanceof Stream) {
+        const hook = () => records.cancel();
+        this.registerCancelHook(hook);
+
+        try {
+          const { value: data, done } = await records[Symbol.asyncIterator]().next();
+          if (done) {
+            this.backlog.shift();
+            return resolve(await this.checkBacklog(signal));
+          }
+          return resolve({ index, data });
+        } finally {
+          this.removeCancelHook(hook);
+        }
+      } else {
+        const data = records.shift();
+        if (records.length === 0) {
+          this.backlog.shift();
+        }
+        return resolve({ index, data });
       }
-      return { index, data };
-    } else {
-      const data = records.shift();
-      if (records.length === 0) {
-        this.backlog.shift();
-      }
-      return { index, data };
-    }
+    }, signal);
   }
 
-  protected async __execute__(
-    preProcessor: <T>(a: T) => T | Promise<T> = R.identity
-  ): Promise<{ state: State; value?: T }> {
-    this.executed = true;
-    let i = 0;
-    let traversableActions = this.actions;
-    let data: any;
+  protected __execute__(preProcessor: <T>(a: T) => T | Promise<T> = R.identity): Future<{ state: State; value?: T }> {
+    return Future.of<{ state: State; value?: T }>(async (resolve, __, signal) => {
+      this.executed = true;
+      let i = 0;
+      let traversableActions = this.actions;
+      let data: any;
 
-    try {
-      const { index: actionStream, data: actionData } = await this.checkBacklog();
+      try {
+        const { index: actionStream, data: actionData } = await this.checkBacklog(signal);
 
-      if (actionStream >= 0) {
-        i = actionStream;
-        data = actionData;
-      } else if (this.canRunExecutor) {
-        do {
-          data = this.executor(this.controller.signal);
+        if (actionStream >= 0) {
+          i = actionStream;
+          data = actionData;
+        } else if (this.canRunExecutor) {
           do {
-            if (data instanceof ExecutorState) {
-              this.canRunExecutor = !data.done;
-              data = data.value;
+            data = this.executor(this.controller.signal);
+            do {
+              if (data instanceof ExecutorState) {
+                this.canRunExecutor = !data.done;
+                data = data.value;
 
-              if (!this.canRunExecutor && (data === null || data === undefined)) {
-                [data, traversableActions] = await this.findAndExecuteMostRecentPacker();
+                if (!this.canRunExecutor && (data === null || data === undefined)) {
+                  [data, traversableActions] = await this.findAndExecuteMostRecentPacker(signal);
 
-                if (data === undefined) {
-                  return { state: State.DONE };
+                  if (data === undefined) {
+                    return resolve({ state: State.DONE });
+                  }
                 }
               }
-            }
-            if (data instanceof Promise) data = await data;
-            if (data instanceof Future) data = await data.registerSignal(this.controller.signal);
-            if (data instanceof FutureResult) data = data.value;
-            if (data instanceof Stream) {
-              this.backlog.push({ actionStream: 0, records: data.cancelOnSignal(this.controller.signal) });
-              return { state: State.CONTINUE };
-            }
-          } while (data instanceof ExecutorState);
-        } while (data === undefined && this.canRunExecutor);
-      } else {
-        [data, traversableActions] = await this.findAndExecuteMostRecentPacker();
+              if (data instanceof Promise) data = await data;
+              if (data instanceof Future) data = await data.registerSignal(signal);
+              if (data instanceof FutureResult) data = data.value;
+              if (data instanceof Stream) {
+                this.backlog.push({ actionStream: 0, records: data });
+                return resolve({ state: State.CONTINUE });
+              }
+            } while (data instanceof ExecutorState);
+          } while (data === undefined && this.canRunExecutor);
+        } else {
+          [data, traversableActions] = await this.findAndExecuteMostRecentPacker(signal);
 
-        if (data === undefined) {
-          return { state: State.DONE };
+          if (data === undefined) {
+            return resolve({ state: State.DONE });
+          }
+        }
+      } catch (e) {
+        const [value, index] = await this.processError(e, i, traversableActions, signal);
+        i = index + 1;
+        if (value === undefined || value === null) return resolve({ state: State.CONTINUE });
+        data = value;
+      }
+
+      resolve(await this.processor(i, traversableActions, data, preProcessor, signal));
+    }, this.controller.signal);
+  }
+
+  protected processor(
+    index: number,
+    traversableActions: Array<{ type: ActionType; functor: ActionFunctor<T> }>,
+    record: any,
+    preProcessor: <T>(a: T) => T | Promise<T> = R.identity,
+    signal: AbortSignal
+  ): Future<{ state: State; value?: T | undefined }> {
+    return Future.of(async (resolve, reject, signal) => {
+      let data = record;
+      for (let i = index; i < traversableActions.length; i++) {
+        try {
+          const { type, functor } = traversableActions[i];
+          switch (type) {
+            case ActionType.FILTER: {
+              const preResult = await this.yieldTrueResult(preProcessor(data), signal);
+              const result = await this.yieldTrueResult(
+                functor(preResult instanceof Promise ? await preResult : preResult),
+                signal
+              );
+              if (result === null || result === undefined) {
+                return resolve({ state: State.CONTINUE });
+              }
+              data = result as T;
+              break;
+            }
+            case ActionType.TRANSFORM: {
+              const preResult = await this.yieldTrueResult(preProcessor(data), signal);
+              const result = await this.yieldTrueResult(
+                functor(preResult instanceof Promise ? await preResult : preResult),
+                signal
+              );
+
+              if (result instanceof Stream) {
+                this.backlog = [{ actionStream: i + 1, records: result }, ...this.backlog];
+                return resolve({ state: State.CONTINUE });
+              }
+              data = result as T;
+              break;
+            }
+            case ActionType.PACK: {
+              const preResult = await this.yieldTrueResult(preProcessor(data), signal);
+              const result = (await this.yieldTrueResult(
+                functor(preResult instanceof Promise ? await preResult : preResult),
+                signal
+              )) as LimitResult<T>;
+
+              if (!result.done) {
+                return resolve({ state: State.CONTINUE });
+              }
+              data = result.value;
+              break;
+            }
+            case ActionType.LIMIT: {
+              const preResult = await this.yieldTrueResult(preProcessor(data), signal);
+              const result = (await this.yieldTrueResult(
+                functor(preResult instanceof Promise ? await preResult : preResult),
+                signal
+              )) as LimitResult<T>;
+
+              if (result.done) {
+                this.canRunExecutor = false;
+                this.backlog = [];
+                this.actions = traversableActions.splice(i + 1);
+                traversableActions = this.actions;
+                i = -1;
+              }
+              data = result.value;
+              break;
+            }
+            case ActionType.UNPACK: {
+              const preResult = await this.yieldTrueResult(preProcessor(data), signal);
+              const result = (await this.yieldTrueResult(
+                functor(preResult instanceof Promise ? await preResult : preResult),
+                signal
+              )) as T[];
+
+              if (result.length === 0) {
+                return resolve({ state: State.CONTINUE });
+              } else if (result.length === 1) {
+                data = result[0];
+              } else {
+                const value = result.shift();
+                this.backlog = [{ actionStream: i + 1, records: result }, ...this.backlog];
+                data = value;
+              }
+            }
+          }
+        } catch (error: unknown) {
+          const [value, index] = await this.processError(error, i, traversableActions, signal);
+          i = index;
+          if (value !== undefined && value !== null) data = value;
         }
       }
-    } catch (e) {
-      const [value, index] = await this.processError(e, i, traversableActions);
-      i = index + 1;
-      if (value === undefined || value === null) return { state: State.CONTINUE };
-      data = value;
-    }
+      return resolve({ state: State.MATCHED, value: data });
+    }, signal);
+  }
 
-    for (; i < traversableActions.length; i++) {
+  private internalNext() {
+    return this.runLock.with(async ({ signal }) => {
       try {
-        const { type, functor } = traversableActions[i];
-        switch (type) {
-          case ActionType.FILTER: {
-            const preResult = await this.yieldTrueResult(preProcessor(data));
-            const result = await this.yieldTrueResult(
-              functor(preResult instanceof Promise ? await preResult : preResult)
-            );
-            if (result === null || result === undefined) {
-              return { state: State.CONTINUE };
-            }
-            data = result as T;
-            break;
+        while (!this.done) {
+          const { state, value } = await (this.sourceStream && this.concurrencyLimit
+            ? (this.forwardExecute() as any)
+            : this.__execute__());
+          if (state === State.MATCHED && value !== undefined) return { done: false, value };
+          if (state === State.DONE) {
+            this.done = true;
+            if (value !== undefined) return { done: false, value };
           }
-          case ActionType.TRANSFORM: {
-            const preResult = await this.yieldTrueResult(preProcessor(data));
-            const result = await this.yieldTrueResult(
-              functor(preResult instanceof Promise ? await preResult : preResult)
-            );
-
-            if (result instanceof Stream) {
-              this.backlog = [{ actionStream: i + 1, records: result }, ...this.backlog];
-              return { state: State.CONTINUE };
-            }
-            data = result as T;
-            break;
-          }
-          case ActionType.PACK: {
-            const preResult = await this.yieldTrueResult(preProcessor(data));
-            const result = (await this.yieldTrueResult(
-              functor(preResult instanceof Promise ? await preResult : preResult)
-            )) as LimitResult<T>;
-
-            if (!result.done) {
-              return { state: State.CONTINUE };
-            }
-            data = result.value;
-            break;
-          }
-          case ActionType.LIMIT: {
-            const preResult = await this.yieldTrueResult(preProcessor(data));
-            const result = (await this.yieldTrueResult(
-              functor(preResult instanceof Promise ? await preResult : preResult)
-            )) as LimitResult<T>;
-
-            if (result.done) {
-              this.canRunExecutor = false;
-              this.backlog = [];
-              this.actions = traversableActions.splice(i + 1);
-              traversableActions = this.actions;
-              i = -1;
-            }
-            data = result.value;
-            break;
-          }
-          case ActionType.UNPACK: {
-            const preResult = await this.yieldTrueResult(preProcessor(data));
-            const result = (await this.yieldTrueResult(
-              functor(preResult instanceof Promise ? await preResult : preResult)
-            )) as T[];
-
-            if (result.length === 0) {
-              return { state: State.CONTINUE };
-            } else if (result.length === 1) {
-              data = result[0];
-            } else {
-              const value = result.shift();
-              this.backlog = [{ actionStream: i + 1, records: result }, ...this.backlog];
-              data = value;
-            }
+          if (this.controller.signal.aborted) {
+            this.done = true;
           }
         }
-      } catch (error: unknown) {
-        const [value, index] = await this.processError(error, i, traversableActions);
-        i = index;
-        if (value !== undefined && value !== null) data = value;
+        this.invokeCompletionHooks();
+        return { done: true, value: undefined };
+      } catch (error) {
+        this.invokeCompletionHooks();
+        if (error instanceof StreamEnded) return { done: true, value: null };
+        throw error;
       }
-    }
-    return { state: State.MATCHED, value: data };
+    });
   }
 
   private invokeCompletionHooks() {
@@ -872,64 +971,123 @@ export class Stream<T> implements AsyncGenerator<T> {
     }
 
     this.completionHookInvoked = true;
-    this.completionHooks.forEach(
-      (handler) =>
-        new Promise((resolve, reject) => {
-          try {
-            handler();
-            resolve(null);
-          } catch (e) {
-            reject(e);
-          }
-        })
-    );
+    this.completionHooks.forEach((handler) => {
+      void new Promise((resolve, reject) => {
+        try {
+          handler();
+          resolve(null);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
   }
 
-  private async processError(
+  private processError(
     error: unknown,
     i: number,
-    actions: Array<{ type: ActionType; functor: ActionFunctor<T> }>
-  ): Promise<[any, number]> {
-    let errorMessage: Error;
+    actions: Array<{ type: ActionType; functor: ActionFunctor<T> }>,
+    signal: AbortSignal
+  ): Future<[any, number]> {
+    return Future.of(async (resolve, reject, signal) => {
+      let errorMessage: Error;
 
-    if (actions.length === 0) throw error;
-    else if (!(error instanceof Error)) errorMessage = new Error(error as string);
-    else errorMessage = error;
+      if (actions.length === 0) throw error;
+      else if (!(error instanceof Error)) errorMessage = new Error(error as string);
+      else errorMessage = error;
 
-    const catchAction = actions.splice(i + 1).find((v, index) => {
-      if (v.type === ActionType.CATCH) {
-        i = index;
-        return true;
+      const catchAction = actions.splice(i + 1).find((v, index) => {
+        if (v.type === ActionType.CATCH) {
+          i = index;
+          return true;
+        }
+        return false;
+      });
+      if (!catchAction) throw error;
+      try {
+        const value = catchAction.functor(errorMessage as any);
+        return resolve([await this.yieldTrueResult(value, signal), i]);
+      } catch (e) {
+        return resolve(await this.processError(e, i, actions, signal));
       }
-      return false;
+    }, signal);
+  }
+
+  private findAndExecuteMostRecentPacker(
+    signal: AbortSignal
+  ): Future<[T | undefined, Array<{ type: ActionType; functor: ActionFunctor<T> }>]> {
+    return Future.of(async (resolve, __, signal) => {
+      const index = this.actions.findIndex((action) => action.type === ActionType.PACK);
+      if (index >= 0) {
+        const functor = this.actions[index].functor;
+        const result = (await this.yieldTrueResult(functor(undefined as any), signal)) as LimitResult<T>;
+        if (result.done) {
+          return resolve([result.value, this.actions.slice(index + 1)]);
+        }
+      }
+      return resolve([undefined, []]);
+    }, signal);
+  }
+
+  private yieldTrueResult(value: any, signal: AbortSignal) {
+    return Future.of(async (resolve, reject, signal) => {
+      if (value instanceof Future) value = await value.registerSignal(signal);
+      if (value instanceof FutureResult) value = value.value;
+      if (value instanceof Promise) value = await value;
+      resolve(value);
+    }, signal);
+  }
+
+  private forwardExecute(preProcessor: <T>(a: T) => Promise<T> | T = R.identity): Future<{
+    state: State;
+    value?: T[];
+  }> {
+    return Future.of(async (resolve, reject, signal) => {
+      let pending: Array<Future<{ state: State; value?: any }>> = [];
+
+      for await (const data of this.sourceStream!.internalIterator()) {
+        pending.push(this.processor(0, this.actions, data, preProcessor, signal));
+        if (pending.length === this.concurrencyLimit) {
+          const result = await this.collectResult(pending, signal);
+
+          if (result.state === State.CONTINUE) {
+            pending = [];
+          } else {
+            return resolve(result);
+          }
+        }
+      }
+
+      const { state, value } = await this.collectResult(pending, signal);
+      if (state === State.CONTINUE) {
+        return resolve({ state: State.DONE });
+      }
+      return resolve({ state: State.DONE, value });
     });
-    if (!catchAction) throw error;
-    try {
-      const value = catchAction.functor(errorMessage as any);
-      return [await this.yieldTrueResult(value), i];
-    } catch (e) {
-      return await this.processError(e, i, actions);
-    }
   }
 
-  private async findAndExecuteMostRecentPacker(): Promise<
-    [T | undefined, Array<{ type: ActionType; functor: ActionFunctor<T> }>]
-  > {
-    const index = this.actions.findIndex((action) => action.type === ActionType.PACK);
-    if (index >= 0) {
-      const functor = this.actions[index].functor;
-      const result = (await this.yieldTrueResult(functor(undefined as any))) as LimitResult<T>;
-      if (result.done) {
-        return [result.value, this.actions.slice(index + 1)];
+  private collectResult(
+    pending: Array<Future<{ state: State; value?: any }>>,
+    signal: AbortSignal
+  ): Future<{ state: State; value?: any[] }> {
+    return Future.of(async (resolve, reject, signal) => {
+      let doneFound = false;
+      const results = (await Future.collect(pending).registerSignal(signal)).filter((v) => {
+        if (v.state === State.DONE) {
+          doneFound = true;
+          return true;
+        } else if (v.state === State.MATCHED) {
+          return true;
+        }
+        return false;
+      });
+
+      if (doneFound) {
+        return resolve({ state: State.DONE, value: results.map((v) => v.value) });
+      } else if (results.length) {
+        return resolve({ state: State.MATCHED, value: results.map((v) => v.value) });
       }
-    }
-    return [undefined, []];
-  }
-
-  private async yieldTrueResult(value: any) {
-    if (value instanceof Future) value = await value;
-    if (value instanceof FutureResult) value = value.value;
-    if (value instanceof Promise) value = await value;
-    return value;
+      return resolve({ state: State.CONTINUE });
+    }, signal);
   }
 }
