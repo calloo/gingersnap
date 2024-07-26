@@ -93,10 +93,14 @@ export class Lock implements ContextManager<Lock> {
     if (this.locked) {
       return this.evt.wait(waitPeriod).thenApply(() => {
         if (this.locked) return this.acquire(waitPeriod);
+        this.evt.clear();
+        this.__locked__ = true;
         return this;
       });
     }
 
+    this.evt.clear();
+    this.__locked__ = true;
     return Future.completed<Lock>(this);
   }
 
