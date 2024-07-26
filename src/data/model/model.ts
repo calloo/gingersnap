@@ -428,7 +428,7 @@ export class Model {
         }
         return;
       } else if ((value === undefined || value === null) && (model[key] === undefined || model[key] === null)) {
-        throw new ParsingError([], `Property ${key} is missing from the data provided. ${JSON.stringify(data)}`);
+        throw new ParsingError([], `Property "${key}" is missing from the data provided. ${JSON.stringify(data)}`);
       } else if ((value === undefined || value === null) && !(model[key] === undefined || model[key] === null)) {
         return;
       }

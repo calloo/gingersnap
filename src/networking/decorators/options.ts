@@ -253,13 +253,6 @@ export const Path = (value: string) => {
  */
 export const Query = (value: string) => {
   return (target: any, propertyKey: string, parameterIndex: number) => {
-    const type: string = R.path(
-      [parameterIndex, "name"],
-      Reflect.getMetadata("design:paramtypes", target, propertyKey)
-    )!;
-    if (type !== "String") {
-      throw Error("Invalid type given for @Query. Should be of type string");
-    }
     const proto = createProps(target.constructor);
     const lens = R.lensPath(["methodConfig", propertyKey, "parameters", "queries"]);
     proto.__internal__ = R.over(

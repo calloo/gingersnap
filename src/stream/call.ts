@@ -58,8 +58,11 @@ export class Callable<
    * @protected
    */
   protected async __process_json__(json: Object | Object[], resp?: Response): Promise<T> {
-    if (this.ModelClass?.name === String.name) {
+    if (this.ModelClass?.name === String.name && !this.arrayResponseSupport) {
       throw new CallExecutionError("Invalid decorator combination. Cannot use String model with JSON formatting", resp);
+    }
+    if (Array.isArray(json) && this.arrayResponseSupport && this.ModelClass?.name === String.name) {
+      return json.map((v) => (typeof v !== "string" ? String(v) : v)) as T;
     }
     const Class = this.ModelClass as typeof Model;
 
