@@ -7,6 +7,10 @@ import { AbortError } from "../errors";
 export type Collector<T, K> = (stream: Stream<K>) => Future<T>;
 
 export class Collectors {
+  static read<K>(functor: (value: K) => void | Future<void>) {
+    return (stream: Stream<K>): Future<void> => stream.forEach(functor);
+  }
+
   static asList() {
     return <K>(stream: Stream<K>): Future<K[]> => {
       return Future.of(async (resolve, reject, signal) => {

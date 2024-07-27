@@ -25,6 +25,7 @@ export default (options) => {
     "data/decoders": "./src/data/decoders/index.ts",
     "data/model": "./src/data/model/index.ts",
     "data/bus": "./src/data/bus.ts",
+    "data/value": "./src/data/AtomicValue.ts",
   };
 
   return [

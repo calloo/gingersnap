@@ -74,7 +74,7 @@ export class ObservableEventTarget<T> extends Observable<T> {
     return Stream.seed(() => {
       this.__internal__.addEventListener(listeningTopic, listener);
       return queue.streamEntries;
-    }).registerCompletionHook(() => {
+    }).onCompletion(() => {
       this.__internal__.removeEventListener(listeningTopic, listener);
       queue.clear();
     });
@@ -115,7 +115,7 @@ export class ObservableMessagePort<T> extends Observable<T> {
     return Stream.seed(() => {
       this.messagePort.addEventListener("message", listener);
       return queue.streamEntries;
-    }).registerCompletionHook(() => {
+    }).onCompletion(() => {
       this.messagePort.removeEventListener("message", listener);
       queue.clear();
     });

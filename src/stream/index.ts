@@ -7,6 +7,8 @@ import { ExecutorState } from "./state";
 import { Collector } from "./collector";
 import { Lock } from "../synchronize";
 import { IllegalOperationError } from "../errors/IllegalOperationError";
+import { Queue } from "../data-structures/object";
+import { AtomicValue } from "../data/AtomicValue";
 
 enum ActionType {
   TRANSFORM,
@@ -91,7 +93,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * can come from a Stream or Future
    * @param supplier
    */
-  public static seed<T>(supplier: () => Stream<T> | Future<T>): Stream<T> {
+  static seed<T>(supplier: () => Stream<T> | Future<T>): Stream<T> {
     return new Future<T>((resolve, reject, signal) => {
       resolve(supplier() as any);
     }).stream;
@@ -102,7 +104,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * stream will throw an error
    * @param futures
    */
-  public static asCompleted(futures: Array<Future<any>>) {
+  static asCompleted(futures: Array<Future<any>>) {
     const registerSignal = R.once((signal: AbortSignal) => {
       futures.forEach((future) => {
         future.registerSignal(signal);
@@ -134,7 +136,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Stream the next available result from the list of streams. If any stream fails, then this merged stream also fails.
    * @param streams
    */
-  public static merge<K extends Array<Stream<any>>>(streams: K): Stream<InferStreamResult<K[number]>> {
+  static merge<K extends Array<Stream<any>>>(streams: K): Stream<InferStreamResult<K[number]>> {
     const register = R.once((signal: AbortSignal) => {
       signal.onabort = () => streams.forEach((stream) => stream.cancel());
     });
@@ -171,7 +173,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Aggregates the results from multiple streams
    * @param streams
    */
-  public static zip<K extends Array<Stream<any>>>(streams: K): Stream<Array<InferStreamResult<K[number]>>> {
+  static zip<K extends Array<Stream<any>>>(streams: K): Stream<Array<InferStreamResult<K[number]>>> {
     const register = R.once(
       (signal: AbortSignal) => (signal.onabort = () => streams.forEach((stream) => stream.cancel()))
     );
@@ -232,13 +234,8 @@ export class Stream<T> implements AsyncGenerator<T> {
     });
   }
 
-  /**
-   * Cancel the stream on the given signal
-   * @param signal
-   */
-  cancelOnSignal(signal: AbortSignal) {
-    signal.addEventListener("abort", () => this.cancel());
-    return this;
+  get isParallel() {
+    return this.concurrencyLimit && this.sourceStream;
   }
 
   /**
@@ -259,6 +256,15 @@ export class Stream<T> implements AsyncGenerator<T> {
           .catch(reject);
       }
     });
+  }
+
+  /**
+   * Cancel the stream on the given signal
+   * @param signal
+   */
+  cancelOnSignal(signal: AbortSignal) {
+    signal.addEventListener("abort", () => this.cancel());
+    return this;
   }
 
   parallel(concurrentlyLimit: number = 3) {
@@ -459,22 +465,30 @@ export class Stream<T> implements AsyncGenerator<T> {
     return newStream;
   }
 
-  public registerCancelHook(hook: () => any) {
+  /**
+   * Register hook that is only ever called if stream was cancelled
+   * @param hook
+   */
+  onCancellation(hook: () => any) {
     this.cancelHooks.add(hook);
     return this;
   }
 
-  public removeCancelHook(hook: () => any) {
+  removeCancelHook(hook: () => any) {
     this.cancelHooks.delete(hook);
     return this;
   }
 
-  public registerCompletionHook(hook: () => any) {
+  /**
+   * Register hook that is called once the stream completes, cancelled or fails
+   * @param hook
+   */
+  onCompletion(hook: () => any) {
     this.completionHooks.add(hook);
     return this;
   }
 
-  public removeCompletionHook(hook: () => any) {
+  removeCompletionHook(hook: () => any) {
     this.completionHooks.delete(hook);
     return this;
   }
@@ -483,7 +497,7 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Cancels the stream
    * @param reason
    */
-  public cancel(reason?: any): void {
+  cancel(reason?: any): void {
     this.controller.abort(reason);
     this.invokeCompletionHooks();
     this.cancelHooks.forEach((handler) => {
@@ -516,6 +530,10 @@ export class Stream<T> implements AsyncGenerator<T> {
     return this;
   }
 
+  /**
+   * Process stream data while predicate is true
+   * @param predicate
+   */
   takeWhile(predicate: (v: T) => boolean): Stream<T> {
     this.actions.push({
       type: ActionType.LIMIT,
@@ -529,6 +547,10 @@ export class Stream<T> implements AsyncGenerator<T> {
     return this;
   }
 
+  /**
+   * Drop stream data until predicate is no longer true
+   * @param predicate
+   */
   skipWhile(predicate: (v: T) => boolean): Stream<T> {
     let startFound = false;
     this.actions.push({
@@ -544,6 +566,11 @@ export class Stream<T> implements AsyncGenerator<T> {
     return this;
   }
 
+  /**
+   * Removes duplicates from the stream based on the key extractor functor provided
+   * @param uniqKeyExtractor
+   * @param expiryPeriod
+   */
   dropRepeats(uniqKeyExtractor: (v: T) => string, expiryPeriod: WaitPeriod | undefined = undefined): Stream<T> {
     const cache = new TimeableObject<string, number>(undefined, expiryPeriod);
 
@@ -624,6 +651,42 @@ export class Stream<T> implements AsyncGenerator<T> {
   }
 
   /**
+   * Runs the stream in the background, collecting and buffering the results for the next chain in the stream. This
+   * allows the stream to run concurrently without waiting on single emitted values sequentially
+   * @param maxSize
+   */
+  buffer(maxSize?: number): Stream<T> {
+    return Stream.seed(() => {
+      const queue = new Queue<T>(maxSize);
+      this.forEach((record) => queue.awaitEnqueue(record)).finally(() => {
+        queue
+          .awaitEmpty()
+          .thenApply(() => queue.close())
+          .schedule();
+      });
+
+      return queue.streamEntries.catch((error) => {
+        throw error;
+      });
+    });
+  }
+
+  /**
+   * Process stream values in the background, thereby yielding the latest value if the collector of the stream is too
+   * slow (i.e. values that are not read by collector before new value flows in the stream, will be dropped)
+   */
+  conflate(): Stream<T> {
+    return Stream.seed(() => {
+      const value = new AtomicValue<T>();
+      this.forEach((record) => value.set(record))
+        .finally(() => value.destroy())
+        .schedule();
+
+      return value.stream;
+    });
+  }
+
+  /**
    * If the stream receives an error, handle that error with the given callback. If callback doesn't throw an error,
    * then the stream will recover and resume with the result provided by the callback
    * @param callback
@@ -637,15 +700,15 @@ export class Stream<T> implements AsyncGenerator<T> {
   }
 
   /**
-   * Consumes the entire stream and store the data in an array
+   * Consumes the entire stream and store the data in an array. Future is immediately executed
    */
   collect<K>(collector: Collector<K, T>): Future<K> {
-    return collector(this.isParallel ? this.join() : this);
+    return collector(this.isParallel ? this.join() : this).schedule();
   }
 
   /**
    * Continuously exhaust the stream until the stream ends or the limit is reached. No result will be provided at
-   * the end
+   * the end. Future is immediately executed
    * @param limit
    */
   consume(limit = Number.POSITIVE_INFINITY): Future<void> {
@@ -668,24 +731,28 @@ export class Stream<T> implements AsyncGenerator<T> {
       } catch (error: any) {
         reject(error instanceof FutureError ? error : new FutureError(error?.message ?? "Unknown"));
       }
-    });
+    }).schedule();
   }
 
-  forEach(callback: (v: T) => void): Future<void> {
-    return new Future<void>(async (resolve, reject) => {
+  /**
+   * Iterates over the stream of values, used as a collector. Future is immediately executed
+   * @param callback
+   */
+  forEach(callback: (v: T) => void | Future<void>): Future<void> {
+    return new Future<void>(async (resolve, reject, signal) => {
       try {
-        for await (const value of this) {
-          callback(value);
-        }
+        await this.map((value) => callback(value))
+          .consume()
+          .registerSignal(signal);
         resolve();
       } catch (error: any) {
         reject(error instanceof FutureError ? error : new FutureError(error?.message ?? "Unknown"));
       }
-    });
+    }).schedule();
   }
 
   /**
-   * Runs the stream only once. After this call, the stream is closed
+   * Runs the stream only once. After this call, the stream is closed. Future is immediately executed
    */
   execute(): Future<T> {
     return this.runLock
@@ -713,24 +780,8 @@ export class Stream<T> implements AsyncGenerator<T> {
     return Stream.of(this.internalIterator()).flatten() as Stream<T>;
   }
 
-  get isParallel() {
-    return this.concurrencyLimit && this.sourceStream;
-  }
-
   [Symbol.asyncIterator](): AsyncGenerator<T, any, unknown> {
     return this.isParallel ? this.join() : this;
-  }
-
-  private internalIterator(): AsyncGenerator<T, any, unknown> {
-    const iterator = {
-      next: () => this.internalNext().run(),
-      return: this.return.bind(this),
-      throw: this.throw,
-      [Symbol.asyncIterator](): AsyncGenerator<T, any, unknown> {
-        return iterator;
-      },
-    };
-    return iterator;
   }
 
   next(...args: [] | [unknown]): Promise<IteratorResult<T, any>> {
@@ -756,36 +807,6 @@ export class Stream<T> implements AsyncGenerator<T> {
       done: true,
       value: undefined,
     };
-  }
-
-  private checkBacklog(signal: AbortSignal): Future<{ index: number; data?: any }> {
-    return Future.of(async (resolve, __, signal) => {
-      if (this.backlog.length === 0) return resolve({ index: -1 });
-
-      const { actionStream, records } = this.backlog[0];
-      const index = actionStream;
-      if (records instanceof Stream) {
-        const hook = () => records.cancel();
-        this.registerCancelHook(hook);
-
-        try {
-          const { value: data, done } = await records[Symbol.asyncIterator]().next();
-          if (done) {
-            this.backlog.shift();
-            return resolve(await this.checkBacklog(signal));
-          }
-          return resolve({ index, data });
-        } finally {
-          this.removeCancelHook(hook);
-        }
-      } else {
-        const data = records.shift();
-        if (records.length === 0) {
-          this.backlog.shift();
-        }
-        return resolve({ index, data });
-      }
-    }, signal);
   }
 
   protected __execute__(preProcessor: <T>(a: T) => T | Promise<T> = R.identity): Future<{ state: State; value?: T }> {
@@ -941,6 +962,48 @@ export class Stream<T> implements AsyncGenerator<T> {
     }, signal);
   }
 
+  private internalIterator(): AsyncGenerator<T, any, unknown> {
+    const iterator = {
+      next: () => this.internalNext().run(),
+      return: this.return.bind(this),
+      throw: this.throw,
+      [Symbol.asyncIterator](): AsyncGenerator<T, any, unknown> {
+        return iterator;
+      },
+    };
+    return iterator;
+  }
+
+  private checkBacklog(signal: AbortSignal): Future<{ index: number; data?: any }> {
+    return Future.of(async (resolve, __, signal) => {
+      if (this.backlog.length === 0) return resolve({ index: -1 });
+
+      const { actionStream, records } = this.backlog[0];
+      const index = actionStream;
+      if (records instanceof Stream) {
+        const hook = () => records.cancel();
+        this.onCancellation(hook);
+
+        try {
+          const { value: data, done } = await records[Symbol.asyncIterator]().next();
+          if (done) {
+            this.backlog.shift();
+            return resolve(await this.checkBacklog(signal));
+          }
+          return resolve({ index, data });
+        } finally {
+          this.removeCancelHook(hook);
+        }
+      } else {
+        const data = records.shift();
+        if (records.length === 0) {
+          this.backlog.shift();
+        }
+        return resolve({ index, data });
+      }
+    }, signal);
+  }
+
   private internalNext() {
     return this.runLock.with(async ({ signal }) => {
       try {
@@ -998,7 +1061,7 @@ export class Stream<T> implements AsyncGenerator<T> {
       else if (!(error instanceof Error)) errorMessage = new Error(error as string);
       else errorMessage = error;
 
-      const catchAction = actions.splice(i + 1).find((v, index) => {
+      const catchAction = actions.splice(i).find((v, index) => {
         if (v.type === ActionType.CATCH) {
           i = index;
           return true;

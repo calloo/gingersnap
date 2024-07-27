@@ -1,13 +1,13 @@
 {
   "name": "@cookienerds/gingersnap",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "library for handling data locally and over the network",
   "main": "index.js",
   "scripts": {
     "build": "rollup -c",
     "publish": "cd lib && npm publish",
     "lint": "eslint",
-    "test": "jest",
+    "test": "NODE_OPTIONS=--unhandled-rejections=warn jest",
     "test-with-coverage": "jest --coverage",
     "compile": "tsc",
     "docs:internal:build": "typedoc",

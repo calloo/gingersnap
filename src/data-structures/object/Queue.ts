@@ -1,7 +1,10 @@
 import { WatchableObject } from "./WatchableObject";
-import { QueueEmptyError } from "../../errors";
+import { FutureCancelled, QueueEmptyError } from "../../errors";
 import { Future, WaitPeriod } from "../../future";
 import { Stream } from "../../stream";
+import { QueueFullError } from "../../errors/QueueFullError";
+import { FutureEvent } from "../../synchronize";
+import { ValueDestroyedError } from "../../errors/ValueDestroyedError";
 
 /**
  * Queue data structure for First In First Out operation (FIFO)
@@ -9,15 +12,27 @@ import { Stream } from "../../stream";
 export class Queue<T> extends WatchableObject<number, T> implements Iterator<T> {
   private tail: number;
   private head: number;
+  private closedSignal: AbortSignal;
+  private closed: boolean;
+  private readonly dequeueEvt: FutureEvent;
 
   constructor(objectMaxSize?: number, expiryPeriod?: WaitPeriod) {
     super(objectMaxSize, expiryPeriod);
     this.tail = 0;
     this.head = 0;
+    this.closedSignal = new AbortController().signal;
+    this.closed = false;
+    this.dequeueEvt = new FutureEvent();
   }
 
   get streamEntries() {
     return Stream.of(this.asyncIterator);
+  }
+
+  close() {
+    this.closed = true;
+    this.closedSignal.dispatchEvent(new CustomEvent("abort"));
+    this.closedSignal = AbortSignal.abort();
   }
 
   clone() {
@@ -32,29 +47,72 @@ export class Queue<T> extends WatchableObject<number, T> implements Iterator<T> 
   }
 
   enqueue(value: T) {
+    if (this.objectMaxSize && this.size() >= this.objectMaxSize) {
+      throw new QueueFullError();
+    } else if (this.closed) {
+      throw new ValueDestroyedError();
+    }
     this.set(this.tail, value);
     this.tail++;
   }
 
-  dequeue() {
+  awaitEnqueue(value: T): Future<void> {
+    return Future.of(async (resolve, reject, signal) => {
+      while (this.objectMaxSize && this.size() >= this.objectMaxSize) {
+        this.dequeueEvt.clear();
+        await this.dequeueEvt.wait().registerSignal(signal).registerSignal(this.closedSignal);
+      }
+      this.set(this.tail, value);
+      this.tail++;
+      resolve();
+    });
+  }
+
+  dequeue(): T {
+    if (this.closed) {
+      throw new ValueDestroyedError();
+    }
+
     const value = this.get(this.head);
     if (value !== undefined && value !== null) {
       this.delete(this.head);
       this.head++;
+      this.dequeueEvt.set();
       return value;
     }
     throw new QueueEmptyError();
   }
 
-  awaitDequeue(abortSignal?: AbortSignal) {
-    if (this.empty) {
-      return this.await(this.head, abortSignal).thenApply((v) => {
-        this.delete(this.head);
-        this.head++;
-        return v.value;
-      }) as Future<T>;
+  awaitDequeue(abortSignal?: AbortSignal): Future<T> {
+    if (this.empty && !this.closed) {
+      return this.await(this.head, abortSignal)
+        .registerSignal(this.closedSignal)
+        .thenApply((v) => {
+          this.delete(this.head);
+          this.head++;
+          this.dequeueEvt.set();
+          return v.value;
+        }) as Future<T>;
     }
-    return Future.completed(this.dequeue());
+
+    try {
+      return Future.completed(this.dequeue());
+    } catch (e: any) {
+      return Future.exceptionally(e) as Future<T>;
+    }
+  }
+
+  awaitEmpty() {
+    return Future.of<void>(async (resolve, reject, signal) => {
+      while (!this.closed && !this.empty) {
+        this.dequeueEvt.clear();
+        await this.dequeueEvt.wait();
+      }
+      if (this.closed) {
+        return reject(new ValueDestroyedError());
+      }
+      resolve();
+    });
   }
 
   get asyncIterator(): AsyncGenerator<T> {
@@ -70,16 +128,26 @@ export class Queue<T> extends WatchableObject<number, T> implements Iterator<T> 
         throw e;
       },
       async next(...args: [] | [unknown]): Promise<IteratorResult<T>> {
-        return {
-          done: false,
-          value: await self.awaitDequeue(),
-        };
+        try {
+          return {
+            done: false,
+            value: await self.awaitDequeue(),
+          };
+        } catch (e) {
+          if (e instanceof ValueDestroyedError) {
+            throw new FutureCancelled();
+          }
+          throw e;
+        }
       },
     };
     return generator;
   }
 
   clear() {
+    if (this.closed) {
+      throw new ValueDestroyedError();
+    }
     super.clear();
     this.tail = 0;
     this.head = 0;
@@ -94,6 +162,9 @@ export class Queue<T> extends WatchableObject<number, T> implements Iterator<T> 
   }
 
   peek() {
+    if (this.closed) {
+      throw new ValueDestroyedError();
+    }
     return this.get(this.head);
   }
 

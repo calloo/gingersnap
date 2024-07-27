@@ -95,7 +95,7 @@ export class Files {
         fileStream.close();
       };
       return Stream.of(reader[Symbol.asyncIterator]());
-    }).registerCompletionHook(() => shutdownHook());
+    }).onCompletion(() => shutdownHook());
   }
 
   static readNBytes(source: PathLike, bufferSize: number) {
@@ -128,7 +128,7 @@ export class Files {
           });
         })
       );
-    }).registerCompletionHook(() => shutdownHook());
+    }).onCompletion(() => shutdownHook());
   }
 
   static readString(source: PathLike): Future<string> {
@@ -190,7 +190,7 @@ export class Files {
             }
           })
         )
-        .registerCompletionHook(() => {
+        .onCompletion(() => {
           fileStream.close();
         })
         .cancelOnSignal(signal)
