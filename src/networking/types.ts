@@ -94,6 +94,12 @@ export interface MethodConfiguration {
     ignoreCache?: boolean;
   };
   socketWriteStream?: boolean;
+  socketRequestReply?: {
+    guidPath: Array<string | number>;
+    guidGen: () => any;
+    objectMaxSize?: number;
+    expiryPeriod?: WaitPeriod;
+  };
   customTags?: Array<{
     name: string;
     [string: string]: any;

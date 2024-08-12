@@ -4,7 +4,7 @@ import { ServiceInternalProps } from "./types";
 import * as R from "ramda";
 import { CallExecutionError, ParsingError } from "../errors";
 import { Stream } from "../stream";
-import { FutureResult } from "../future";
+import { Future, FutureResult } from "../future";
 import { JSONDecoder } from "../data/decoders";
 import { Model } from "../data/model";
 import { GingerSnapProps } from "./index";
@@ -46,7 +46,7 @@ export class WebSocketService extends NetworkService {
       this.socket.decoder.load();
     }
     const socketMethods = R.filter(
-      ([_, v]) => (v.socketReadStream ?? v.socketWriteStream) !== undefined,
+      ([_, v]) => (v.socketReadStream ?? v.socketWriteStream ?? v.socketRequestReply) !== undefined,
       R.toPairs(internals.methodConfig)
     );
     R.forEach(([key, config]) => {
@@ -82,7 +82,46 @@ export class WebSocketService extends NetworkService {
       }
 
       this[key] = (body?: any) => {
-        if (config.socketWriteStream) {
+        if (config.socketRequestReply) {
+          const guid = config.socketRequestReply.guidGen();
+          const lens = R.lensPath(config.socketRequestReply.guidPath);
+
+          return Stream.seed(() =>
+            Future.of(async () => {
+              if (!this.socket.opened) {
+                await this.socket.open();
+              }
+              let data: any = body;
+              if (body instanceof Model) {
+                data = body.object();
+              }
+
+              data = R.set(lens, guid, data);
+              await this.socket.send(JSON.stringify(data));
+              return 1;
+            })
+          )
+            .map(() =>
+              this.socket.streamView(
+                R.compose(R.equals(guid), R.view(lens)),
+                config.socketRequestReply!.objectMaxSize,
+                config.socketRequestReply!.expiryPeriod
+              )
+            )
+            .map((data) => {
+              const ModelClass = config.responseClass as typeof Model;
+              return ModelClass.fromJSON(data);
+            })
+            .flatten()
+            .map(async (v) => {
+              let result = oldMethod(v);
+              if (result === null || result === undefined) return v;
+              if (result instanceof Promise) result = await result;
+              if (result instanceof FutureResult) result = result.value;
+
+              return result;
+            });
+        } else if (config.socketWriteStream) {
           if (body === undefined || body === null)
             throw new CallExecutionError("Empty body detected for a write stream");
           return new Stream(async (signal) => {
@@ -104,7 +143,7 @@ export class WebSocketService extends NetworkService {
             return null;
           }).once();
         } else {
-          let stream = this.socket.stream().filter(dataComparator);
+          let stream = this.socket.streamView(dataComparator);
           if (config.socketReadStream?.skip !== undefined) stream = stream.skip(config.socketReadStream.skip);
           if (config.socketReadStream?.take !== undefined) stream = stream.take(config.socketReadStream.take);
 

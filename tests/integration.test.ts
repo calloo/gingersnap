@@ -438,5 +438,13 @@ describe("Test Network Service", function () {
         .slice(0, 2)
         .map((v) => StreamUser.fromJSON(v))
     );
+
+    conn.on("message", (data: any) => {
+      const jsonData = JSON.parse(data);
+      conn.send(JSON.stringify({ ...users[0], guid: jsonData.guid }));
+      conn.send(JSON.stringify({ ...users[1], guid: jsonData.guid }));
+    });
+    const resp = await service.getDCUser(StreamUser.fromJSON(users[0])).take(2).collect(Collectors.asList());
+    expect(resp).toEqual([StreamUser.fromJSON(users[0]), StreamUser.fromJSON(users[1])]);
   });
 });

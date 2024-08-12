@@ -1046,6 +1046,11 @@ export class Stream<T> implements AsyncGenerator<T> {
         }
       });
     });
+    this.backlog.forEach(({ records }) => {
+      if (records instanceof Stream) {
+        records.cancel();
+      }
+    });
   }
 
   private processError(

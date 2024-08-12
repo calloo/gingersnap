@@ -1,5 +1,7 @@
 import { createProps } from "./options";
 import * as R from "ramda";
+import { v4 as uuid } from "uuid";
+import { WaitPeriod } from "../../future";
 
 export const ReadStream =
   (
@@ -33,22 +35,24 @@ export const WriteStream = (target: any, propertyKey: string) => {
   proto.__internal__ = R.set(typeLens, true, proto.__internal__);
 };
 
+export const RequestReply =
+  (
+    guidPath: Array<string | number>,
+    guidGen: () => any = () => uuid(),
+    objectMaxSize?: number,
+    expiryPeriod?: WaitPeriod
+  ) =>
+  (target: any, propertyKey: string) => {
+    const proto = createProps(target.constructor);
+    const typeLens = R.lensPath(["methodConfig", propertyKey, "socketRequestReply"]);
+    proto.__internal__ = R.set(typeLens, { guidPath, guidGen, objectMaxSize, expiryPeriod }, proto.__internal__);
+  };
+
 export const ReplyableStream =
   (keyPath: string | Array<string | number>, responseKeyPath?: string | Array<string | number>) =>
   (target: any, propertyKey: string) => {
     const proto = createProps(target.constructor);
     const typeLens = R.lensPath(["methodConfig", propertyKey, "socketReadStream"]);
-    // proto.__internal__ = R.over(
-    //   typeLens,
-    //   (v) => ({
-    //     ...(v ?? {}),
-    //     keyPath,
-    //     value,
-    //     model: Reflect.getMetadata("design:paramtypes", target, propertyKey)[0],
-    //     array: false,
-    //   }),
-    //   proto.__internal__
-    // );
   };
 
 export const IgnoreCache = (target: any, propertyKey: string) => {

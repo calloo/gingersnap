@@ -6,6 +6,8 @@ import { Decoder } from "./data/decoders";
 import { FutureEvent, Lock } from "./synchronize";
 import { ExecutorState } from "./stream/state";
 import WebSocket from "modern-isomorphic-ws";
+import { Queue } from "./data-structures/object";
+import { Pair, pair } from "./data-structures/array/Pair";
 
 type SocketFunctor<T extends CloseEvent | Event | MessageEvent> = (this: WebSocket, evt: T) => any;
 
@@ -29,7 +31,7 @@ export class StreamableWebSocket<T> {
 
   private socketListeners: Array<[keyof WebSocketEventMap, SocketFunctor<any>]>;
 
-  private messageQueues: T[][];
+  private messageQueues: Array<T[] | Pair<Queue<T>, (v: T) => boolean>>;
 
   private readonly url: string;
 
@@ -164,8 +166,12 @@ export class StreamableWebSocket<T> {
                 await this.listenerAvailableEvent.wait();
               }
 
-              for (const messageQueue of this.messageQueues) {
-                messageQueue.push(result);
+              for (const value of this.messageQueues) {
+                if (value instanceof Pair && value.second(result)) {
+                  value.first.enqueue(result);
+                } else if (Array.isArray(value)) {
+                  value.push(result);
+                }
               }
 
               this.dataReadyEvent.set();
@@ -207,6 +213,16 @@ export class StreamableWebSocket<T> {
     this.getSocket()?.send(data instanceof Blob ? await data.arrayBuffer() : data);
   }
 
+  streamView(lens: (v: T) => boolean, objectMaxSize?: number, expiryPeriod?: WaitPeriod): Stream<T> {
+    const queue = new Queue<T>(objectMaxSize, expiryPeriod);
+    const tuple = pair(queue, lens);
+    this.messageQueues.push(tuple);
+    this.listenerAvailableEvent.set();
+    return queue.streamEntries.cancelOnSignal(this.signal).onCompletion(() => {
+      this.messageQueues = this.messageQueues.filter((v) => v !== tuple);
+    });
+  }
+
   /**
    * Gets the stream for messages received via this socket
    */
@@ -231,7 +247,11 @@ export class StreamableWebSocket<T> {
           .registerSignal(signal);
       }
       return data;
-    }).cancelOnSignal(this.signal);
+    })
+      .cancelOnSignal(this.signal)
+      .onCompletion(() => {
+        this.messageQueues = this.messageQueues.filter((v) => v !== queue);
+      });
   }
 
   private addEventListener<T extends CloseEvent | Event | MessageEvent>(

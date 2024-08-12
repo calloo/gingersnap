@@ -7,7 +7,7 @@ import { Stream } from "../stream";
 
 type Resolve<T> = (value: T | PromiseLike<T>) => any;
 type Reject = (reason?: Error) => void;
-type Executor<T> = (resolve: Resolve<T>, reject: Reject, signal: AbortSignal) => void | Promise<void>;
+type Executor<T> = (resolve: Resolve<T>, reject: Reject, signal: AbortSignal) => void | Promise<T | void>;
 type FutureReturnType<T> = T extends Future<infer U> ? U : T;
 
 const calculatePeriodValue = (period: WaitPeriod) =>

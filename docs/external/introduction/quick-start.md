@@ -1,7 +1,7 @@
 # Getting Started
 
-This section will quickly carry you through the main help you build a basic service layer for your web application. By the end of this
-tutorial, you will understand:
+This section will quickly carry you through the core features that will help you build a basic service layer for your web application. By the end of this
+tutorial, you will understand how to use gingersnap to:
 - modelling data
 - sending and receiving messages via HTTP/S
 
@@ -34,8 +34,8 @@ pnpm init
 To install gingersnap, you need to access the custom NPM repository of CookieNerds hosted on GitLab.
 Create a .npmrc file and replace **AUTH_TOKEN** with the auth token created for you by a CookieNerds employee.
 ```text
-@cookienerds:registry=https://gitlab.com/api/v4/projects/31753272/packages/npm/
-//gitlab.com/api/v4/projects/31753272/packages/npm/:_authToken="<AUTH_TOKEN>"
+@cookienerds:registry=https://gitlab.com/api/v4/groups/12516153/-/packages/npm/
+//gitlab.com/api/v4/groups/12516153/-/packages/npm/:_authToken="<AUTH_TOKEN>"
 ```
 
 Install typescript and gingersnap
@@ -57,7 +57,7 @@ pnpm install --save @cookienerds/gingersnap
 ```
 :::
 
-Setup tsconfig.json with target of es2015 and emit decorator metadata enabled.
+Setup tsconfig.json with target of es2015 and emit decorator metadata enabled and disable null checks.
 ```json
 {
   "compilerOptions": {
@@ -68,6 +68,7 @@ Setup tsconfig.json with target of es2015 and emit decorator metadata enabled.
     "strict": true,
     "declaration": true,
     "experimentalDecorators": true,
+    "strictNullChecks": false,
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
@@ -109,8 +110,7 @@ We need to model the following JSON data format that we expect to receive
 
 To create a model, we need to extend the Model class. Each property that we expect a post to contain, should
 be a **Field** in the model. To create a field, we need to define a property on the class, with the **@Field**
-decorator. Given we expect the property to exist, we use the exclamation character (!) to let
-typescript know the value will exist, and if it doesn't exist an error will automatically be thrown.
+decorator.
 
 ```ts
 // src/post.model.ts
@@ -118,22 +118,43 @@ import { Field, Model } from "@cookienerds/gingersnap/data/model";
 
 export class Post extends Model {
     @Field() // maps the "id" field in the post JSON data to the id property
-    id!: number;
+    id: number;
     
     @Field("userId") // maps the "userId" field in the post JSON data to the user property
-    user!: number;
+    user: number;
     
     @Field() // maps the "title" field in the post JSON data to the title property
-    title!: string;
+    title: string;
     
     @Field() // maps the "body" field in the post JSON data to the body property
-    body!: string;
+    body: string;
 }
 ```
 
+You can manually convert JSON to models by invoking the static method **fromJSON**. This will run validations and if any
+field is missing will throw an error
+
+```ts
+//// testing model
+
+// works
+const post1: Post = Post.fromJSON({
+  "id": 1,
+  "userId": 1,
+  "title": "sunt aut facere repellat...",
+  "body": 	"quia et suscipit\nsuscipit ..."
+})
+
+// will throw an error as title and body is missing
+const post2: Post = Post.fromJSON({
+  "id": 1,
+  "userId": 1,
+})
+```
+
 ## Step 3: Setup Network Service
-To communicate with https://jsonplaceholder.typicode.com, we need to send a network request. To do this, we
-need to create a class that extends Service.
+To communicate with https://jsonplaceholder.typicode.com, we need to send a network request. A network service is 
+responsible for providing the logic for network I/O operation based on descriptive annotations
 
 ```ts
 // src/post.service.ts
@@ -141,16 +162,16 @@ import {
   PASS,
   JSONResponse, 
   GET,
-  Service,
+  NetworkService,
 } from "@cookienerds/gingersnap/networking";
-import { Call } from "@cookienerds/gingersnap/stream/call";
+import { Stream } from "@cookienerds/gingersnap/stream";
 import { Post } from "./post.model";
 
-export class PostService extends Service { // [!code focus]
-  @JSONResponse({ modelType: Post })
-  @GET("/posts")
-  getPosts(): Call<Post> {
-    return PASS;
+export class PostService extends NetworkService {
+  @JSONResponse({ modelType: Post }) // accept JSON response and convert it to Post instance
+  @GET("/posts") // sends a GET reques to path /posts
+  getPosts(): Stream<Post> { // returns a stream that produces Post instances
+    return PASS; // placeholder to suppress typescript warnings, as the logic is described not implemented
   }
 }
 ```
@@ -158,53 +179,11 @@ export class PostService extends Service { // [!code focus]
 Retrieving the posts is handled by the **getPosts** method. With gingersnap, all you need to do is describe
 what the method should do, hence the body is empty. **return PASS** is used to suppress typescript warnings that the
 method is empty.
-The return type of **Call\<Post\>** is a Callable object. A callable object handles executing the requests as well as 
-the possibility of cancelling the request.
+The return type of **Stream\<Post\>** is a Streamable object. A stream represents a flow of continuous data from a source
 
-```ts
-// src/post.service.ts
-import {
-  PASS,
-  JSONResponse, 
-  GET,
-  Service,
-} from "@cookienerds/gingersnap/networking";
-import { Call } from "@cookienerds/gingersnap/stream/call";
-import { Post } from "./post.model";
 
-export class PostService extends Service {
-  @JSONResponse({ modelType: Post })
-  @GET("/posts")
-  getPosts(): Call<Post> { // [!code focus]
-    return PASS; // [!code focus]
-  }
-}
-```
-
-**@GET("/posts")** is used to send a GET request along the path /posts. Given we expect a JSON response,
-**@JSONResponse({ modelType: Post })** decorator is used to convert the JSON data received to the Post Model.
-
-```ts
-// src/post.service.ts
-import {
-  PASS,
-  JSONResponse, 
-  GET,
-  Service,
-} from "@cookienerds/gingersnap/networking";
-import { Call } from "@cookienerds/gingersnap/stream/call";
-import { Post } from "./post.model";
-
-export class PostService extends Service {
-  @JSONResponse({ modelType: Post }) // [!code focus]
-  @GET("/posts") // [!code focus]
-  getPosts(): Call<Post> {
-    return PASS;
-  }
-}
-```
-
-To tie it all together, we need to create an instance of the PostService. For this, we need to create a
+## Step 4: Tie it all together
+We need to create an instance of the PostService. For this, we need to create a
 **GingerSnap** object, which is responsible for building services.**snap.create(PostService, {baseUrl: '...'})**
 call creates the service and sets the baseUrl to https://jsonplaceholder.typicode.com.
 ```ts
@@ -213,29 +192,12 @@ import { GingerSnap } from "@cookienerds/gingersnap/networking";
 import { PostService } from "./post.service";
 
 async function main() {
-    const snap = new GingerSnap(); // [!code focus]
-    const postService = snap.create(PostService, {baseUrl: 'https://jsonplaceholder.typicode.com'}); // [!code focus]
-    const posts = await postService.getPosts().execute();
-    console.log('Received the following posts..');
-    posts.forEach(post => {
-       console.log(`${post.id}. Title - ${post.title} Body - ${post.body}`); 
-    });
-}
-
-main();
-```
-
-To execute the **call** object returned from **getPosts**, we need to run the execute method. This will now return a 
-list of post objects.
-```ts
-// src/main.ts
-import { GingerSnap } from "@cookienerds/gingersnap/networking";
-import { PostService } from "./post.service";
-
-async function main() {
     const snap = new GingerSnap();
     const postService = snap.create(PostService, {baseUrl: 'https://jsonplaceholder.typicode.com'});
-    const posts = await postService.getPosts().execute(); // [!code focus]
+    
+    // execute() runs the stream once, and retrieves only one result
+    // given REST API GET call only gives one result, only need to read from stream once
+    const posts = await postService.getPosts().execute();
     console.log('Received the following posts..');
     posts.forEach(post => {
        console.log(`${post.id}. Title - ${post.title} Body - ${post.body}`); 
