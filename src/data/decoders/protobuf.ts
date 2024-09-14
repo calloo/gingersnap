@@ -18,8 +18,8 @@ export class ProtobufDecoder<T extends Message> implements Decoder<T> {
     }
   }
 
-  async decode(data: Blob) {
-    return this.type.decode(new Uint8Array(await data.arrayBuffer())) as T;
+  decode(data: ArrayBuffer) {
+    return this.type.decode(new Uint8Array(data)) as T;
   }
 
   load() {

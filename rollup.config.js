@@ -26,6 +26,7 @@ export default (options) => {
     "data/model": "./src/data/model/index.ts",
     "data/bus": "./src/data/bus.ts",
     "data/value": "./src/data/AtomicValue.ts",
+    store: "./src/data/store/index.ts",
   };
 
   return [

@@ -1,5 +1,6 @@
 import { Decoder } from "../data/decoders";
 import { NetworkService } from "./NetworkService";
+import { CacheManager } from "../data/store/manager";
 
 export { NetworkService } from "./NetworkService";
 export { WebSocketService } from "./SocketService";
@@ -48,6 +49,7 @@ export {
   JSONResponse,
   BaseUrl,
   Cached,
+  RequestReply,
 } from "./decorators";
 export { ReplyStreamDirection, MapOfHeaders, ParamHeaders, MapOfQueries, MapOfPath, NONE, PASS } from "./types";
 export * from "./http";
@@ -55,8 +57,8 @@ export * from "./http";
 export interface GingerSnapProps {
   baseUrl?: string;
   retryLimit?: number;
-  cacheServices?: boolean;
   decoder?: Decoder<any>;
+  cacheManager?: CacheManager;
   [string: string]: any;
 }
 

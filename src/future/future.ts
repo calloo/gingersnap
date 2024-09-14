@@ -5,12 +5,12 @@ import { v4 as uuid } from "uuid";
 import { FutureResult, InferredFutureResult } from "./result";
 import { Stream } from "../stream";
 
-type Resolve<T> = (value: T | PromiseLike<T>) => any;
+type Resolve<T> = (value: T | PromiseLike<T> | Future<T>) => any;
 type Reject = (reason?: Error) => void;
 type Executor<T> = (resolve: Resolve<T>, reject: Reject, signal: AbortSignal) => void | Promise<T | void>;
 type FutureReturnType<T> = T extends Future<infer U> ? U : T;
 
-const calculatePeriodValue = (period: WaitPeriod) =>
+export const calculatePeriodValue = (period: WaitPeriod) =>
   (period.hours ?? 0) * 60 * 60 * 1000 +
   (period.minutes ?? 0) * 60 * 1000 +
   (period.seconds ?? 0) * 1000 +
@@ -64,6 +64,19 @@ export class Future<T> {
     this.isRunning = false;
     this.processors = new SimpleQueue();
     this.finallyHandlers = new SimpleQueue();
+  }
+
+  /**
+   * Creates a future that wraps the given future, and prevents it from being cancellable on the call to "cancel" method
+   * @param future
+   */
+  public static shield<K>(future: Future<K>): Future<K> {
+    return Future.of((resolve, reject) => {
+      future
+        .thenApply(({ value }) => resolve(value))
+        .catch(reject)
+        .schedule();
+    });
   }
 
   /**
@@ -363,6 +376,17 @@ export class Future<T> {
    * @param clone whether the future should be cloned or not.Defaults to true
    */
   thenApply<K>(callback: (value: FutureResult<T>) => K, clone = false): Future<InferredFutureResult<K>> {
+    if (this.running) {
+      const newFuture = Future.wrap(this.underLyingPromise)
+        .thenApply(callback as any)
+        .registerSignal(this.defaultSignal);
+      this.signals.forEach((signal) => newFuture.registerSignal(signal));
+      return newFuture as Future<InferredFutureResult<K>>;
+    } else if (this.done) {
+      const newFuture = Future.wrap(this.underLyingPromise).thenApply(callback as any);
+      return newFuture as Future<InferredFutureResult<K>>;
+    }
+
     const newFuture = (clone ? this.clone() : this) as Future<InferredFutureResult<K>>;
     newFuture.processors.enqueue({ success: callback as any });
     return newFuture;

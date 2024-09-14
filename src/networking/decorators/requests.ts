@@ -12,6 +12,11 @@ const createRequestDecorator = (type: RequestType) => (path: string) => (target:
   proto.__internal__ = R.set(pathLens, path, proto.__internal__);
 };
 
+export enum CachingMethod {
+  FALLBACK_ON_MISSING = "FALLBACK_ON_MISSING",
+  HIT_FIRST = "HIT_FIRST",
+}
+
 /**
  * Marks method as a GET request
  */
@@ -47,8 +52,10 @@ export const OPTIONS = createRequestDecorator(RequestType.OPTIONS);
  */
 export const HEAD = createRequestDecorator(RequestType.HEAD);
 
-export const Cached = (duration: WaitPeriod) => (target: any, propertyKey: string) => {
-  const proto = createProps(target.constructor);
-  const cacheLens = R.lensPath(["methodConfig", propertyKey, "cache"]);
-  proto.__internal__ = R.set(cacheLens, duration, proto.__internal__);
-};
+export const Cached =
+  (duration: WaitPeriod, persist: boolean = false, method = CachingMethod.HIT_FIRST) =>
+  (target: any, propertyKey: string) => {
+    const proto = createProps(target.constructor);
+    const cacheLens = R.lensPath(["methodConfig", propertyKey, "cache"]);
+    proto.__internal__ = R.set(cacheLens, { duration, persist, method }, proto.__internal__);
+  };

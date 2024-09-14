@@ -53,17 +53,25 @@ export class StreamableWebSocket<T> {
 
   private readonly dataReadyEvent: FutureEvent;
 
-  private readonly listenerAvailableEvent: FutureEvent;
-
   private readonly dataProcessingLock: Lock;
 
   readonly decoder: Decoder<T>;
 
+  private connectionAttemptCount: number;
+
   constructor(
     url: string,
     decoder: Decoder<T>,
-    { retryOnDisconnect, cacheSize, cacheExpiryPeriod, exponentialFactor, backoffPeriodMs }: WebSocketConfiguration = {}
+    {
+      retryOnDisconnect,
+      cacheSize,
+      cacheExpiryPeriod,
+      exponentialFactor,
+      backoffPeriodMs,
+    }: WebSocketConfiguration = {},
+    private readonly maxReconnectAttempt: number = 3
   ) {
+    this.connectionAttemptCount = 0;
     this.signal = new AbortController().signal;
     this.decoder = decoder;
     this.socketListeners = [];
@@ -77,7 +85,6 @@ export class StreamableWebSocket<T> {
     this.messageQueues = [];
     this.evt = new EventTarget();
     this.dataReadyEvent = new FutureEvent();
-    this.listenerAvailableEvent = new FutureEvent();
     this.dataProcessingLock = new Lock();
   }
 
@@ -104,12 +111,14 @@ export class StreamableWebSocket<T> {
         };
       }).schedule();
       this.openFuture = new Future<void>((resolve, reject, signal) => {
-        signal.onabort = () => {
+        const functor = () => {
           this.close();
         };
+        signal.addEventListener("abort", functor);
         let retrying = false;
         const cancelError = this.addEventListener("error", async () => {
-          if (this.retryOnDisconnect && !signal.aborted) {
+          if (this.retryOnDisconnect && !signal.aborted && this.connectionAttemptCount < this.maxReconnectAttempt) {
+            this.connectionAttemptCount++;
             retrying = true;
             this.getSocket()?.close();
             await Future.sleep({
@@ -117,6 +126,7 @@ export class StreamableWebSocket<T> {
             });
             this.createSocket();
           } else {
+            this.connectionAttemptCount = 0;
             retrying = false;
             cancelError();
             cancelOpen();
@@ -125,9 +135,11 @@ export class StreamableWebSocket<T> {
           }
         });
         const cancelOpen = this.addEventListener("open", () => {
+          this.connectionAttemptCount = 0;
           this.backoffPeriods = -1;
           retrying = false;
           resolve();
+          signal.removeEventListener("abort", functor);
           cancelError();
           cancelOpen();
         });
@@ -148,36 +160,20 @@ export class StreamableWebSocket<T> {
             reject(new NetworkError(HTTPStatus.EXPECTATION_FAILED));
           }
         });
-        const cancelQueue = this.addEventListener("message", (evt: MessageEvent) =>
-          this.dataProcessingLock
-            .with(async () => {
-              const data =
-                typeof evt.data === "string" || evt.data instanceof ArrayBuffer
-                  ? new Blob([evt.data])
-                  : (evt.data as Blob);
-              let result = this.decoder.decode(data);
+        const cancelQueue = this.addEventListener("message", (evt: MessageEvent) => {
+          const data = evt.data instanceof ArrayBuffer ? evt.data : new TextEncoder().encode(evt.data).buffer;
+          const result = this.decoder.decode(data);
 
-              if (result instanceof Future || result instanceof Promise) {
-                result = await result;
-              }
+          for (const value of this.messageQueues) {
+            if (value instanceof Pair && value.second(result)) {
+              value.first.enqueue(result);
+            } else if (Array.isArray(value)) {
+              value.push(result);
+            }
+          }
 
-              if (this.messageQueues.length === 0) {
-                this.listenerAvailableEvent.clear();
-                await this.listenerAvailableEvent.wait();
-              }
-
-              for (const value of this.messageQueues) {
-                if (value instanceof Pair && value.second(result)) {
-                  value.first.enqueue(result);
-                } else if (Array.isArray(value)) {
-                  value.push(result);
-                }
-              }
-
-              this.dataReadyEvent.set();
-            })
-            .run()
-        );
+          this.dataReadyEvent.set();
+        });
         this.createSocket();
       });
     }
@@ -217,7 +213,6 @@ export class StreamableWebSocket<T> {
     const queue = new Queue<T>(objectMaxSize, expiryPeriod);
     const tuple = pair(queue, lens);
     this.messageQueues.push(tuple);
-    this.listenerAvailableEvent.set();
     return queue.streamEntries.cancelOnSignal(this.signal).onCompletion(() => {
       this.messageQueues = this.messageQueues.filter((v) => v !== tuple);
     });
@@ -229,7 +224,6 @@ export class StreamableWebSocket<T> {
   stream(): Stream<T> {
     const queue = [];
     this.messageQueues.push(queue);
-    this.listenerAvailableEvent.set();
     return new Stream<T>((signal) => {
       const data = queue.shift();
       if (data === undefined) {
@@ -274,6 +268,19 @@ export class StreamableWebSocket<T> {
     socket.binaryType = "arraybuffer";
     this.socketListeners.forEach(([type, functor]) => socket.addEventListener(type as any, functor));
     this.socket = socket;
+    Future.sleep(2)
+      .thenApply(() => {
+        if (socket.readyState === 0) {
+          socket.close();
+          const evt = new Event("error");
+          this.socketListeners.forEach(([type, functor]) => {
+            if (type === "error") {
+              (functor as any)(evt);
+            }
+          });
+        }
+      })
+      .schedule();
     return socket;
   }
 

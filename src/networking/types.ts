@@ -1,6 +1,7 @@
 import { Credentials } from "../data/model/credentials";
 import { DataFormat } from "../data/model";
 import { WaitPeriod } from "../future";
+import { CachingMethod } from "./decorators";
 
 export enum RequestType {
   GET = "GET",
@@ -66,7 +67,11 @@ interface XMLBodyProps extends BodyProps<BodyType.XML> {
 }
 
 export interface MethodConfiguration {
-  cache: WaitPeriod;
+  cache: {
+    duration: WaitPeriod;
+    persist: boolean;
+    method: CachingMethod;
+  };
   authenticator?: {
     type: Credentials;
     global?: boolean;

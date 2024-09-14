@@ -57,8 +57,11 @@ export class EventSourceService extends NetworkService {
 
         return stream
           .map((data) => {
-            const ModelClass = config.responseClass as typeof Model;
-            return ModelClass.fromString(data, config.dataFormat);
+            if (config.responseClass.prototype instanceof Model) {
+              const ModelClass = config.responseClass as typeof Model;
+              return ModelClass.fromString(data, config.dataFormat);
+            }
+            return config.responseClass(data, config.dataFormat);
           })
           .flatten()
           .map(async (v) => {

@@ -147,7 +147,7 @@ export class Files {
     });
   }
 
-  write(
+  static write(
     data: string | NodeJS.ArrayBufferView | Stream<string | NodeJS.ArrayBufferView>,
     source: PathLike,
     encoding: BufferEncoding = "utf-8"

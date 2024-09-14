@@ -7,7 +7,7 @@ import { FutureEvent } from "../../synchronize";
 import { ExecutorState } from "../../stream/state";
 
 type GetListener<T> = (property: T) => void;
-type SetListener<T, K> = (property: T, oldValue: K | undefined, newValue: K) => void;
+type SetListener<T, K> = (property: T, oldValue: K | undefined, newValue: K) => void | Promise<void>;
 type DeleteListener<T, K> = (property: T, oldValue: K | undefined) => void;
 
 export interface WatchableChange<T, K> {

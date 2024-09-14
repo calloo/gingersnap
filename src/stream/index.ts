@@ -258,6 +258,21 @@ export class Stream<T> implements AsyncGenerator<T> {
     });
   }
 
+  get readableStream() {
+    const iterator = this[Symbol.asyncIterator]();
+    return new ReadableStream<T>({
+      async pull(controller) {
+        const { value, done } = await iterator.next();
+
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      },
+    });
+  }
+
   /**
    * Cancel the stream on the given signal
    * @param signal
@@ -1115,7 +1130,7 @@ export class Stream<T> implements AsyncGenerator<T> {
     return Future.of(async (resolve, reject, signal) => {
       let pending: Array<Future<{ state: State; value?: any }>> = [];
 
-      for await (const data of this.sourceStream!.internalIterator()) {
+      for await (const data of this.sourceStream.internalIterator()) {
         pending.push(this.processor(0, this.actions, data, preProcessor, signal));
         if (pending.length === this.concurrencyLimit) {
           const result = await this.collectResult(pending, signal);

@@ -65,12 +65,12 @@ export class Callable<
     if (Array.isArray(json) && this.arrayResponseSupport && this.ModelClass?.name === String.name) {
       return json.map((v) => (typeof v !== "string" ? String(v) : v)) as T;
     }
-    const Class = this.ModelClass as typeof Model;
+    const invoker = this.ModelClass.prototype instanceof Model ? (this.ModelClass as any).fromJSON : this.ModelClass;
 
     if ((json instanceof Array || Array.isArray(json)) && this.arrayResponseSupport) {
-      return json.map((v) => Class.fromJSON<any>(v)) as T;
+      return json.map((v) => invoker(v)) as T;
     } else if (!(json instanceof Array || Array.isArray(json)) && !this.arrayResponseSupport) {
-      return Class.fromJSON<any>(json);
+      return invoker(json);
     }
 
     throw new CallExecutionError("Invalid data format received", resp);
@@ -99,8 +99,9 @@ export class Callable<
             resp
           );
         }
-        const Class = this.ModelClass as typeof Model;
-        return Class.fromString<any>(await resp.text(), DataFormat.XML);
+        const invoker =
+          this.ModelClass.prototype instanceof Model ? (this.ModelClass as any).fromString : this.ModelClass;
+        return invoker(await resp.text(), DataFormat.XML);
       }
       case ResponseType.BINARY: {
         return (await resp.blob()) as T;

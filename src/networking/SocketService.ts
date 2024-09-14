@@ -21,6 +21,10 @@ export class WebSocketService extends NetworkService {
     );
   }
 
+  get connected() {
+    return this.socket.opened;
+  }
+
   /**
    * Called when socket connection is closed
    * @protected
@@ -36,8 +40,15 @@ export class WebSocketService extends NetworkService {
     await this.socket.closedFuture();
   }
 
+  /**
+   * Awaits socket closed
+   */
+  closedFuture() {
+    return this.socket.closedFuture();
+  }
+
   ready() {
-    return this.socket.open();
+    return Future.shield(this.socket.open());
   }
 
   protected __setup__(): void {
@@ -81,6 +92,21 @@ export class WebSocketService extends NetworkService {
         );
       }
 
+      // TODO add caching for websockets
+      // const cacheInfo = config.cache;
+      // let cache: Cache<string, ArrayBuffer> | undefined;
+      //
+      // if (cacheInfo) {
+      //   cache = this.cacheManager.createCache(
+      //     this.baseUrl,
+      //     cacheInfo.persist,
+      //     async (buffer) => JSON.stringify(new Uint8Array(buffer)),
+      //     (v) => Uint8Array.of(JSON.parse(v)).buffer,
+      //     undefined,
+      //     cacheInfo.duration
+      //   );
+      // }
+
       this[key] = (body?: any) => {
         if (config.socketRequestReply) {
           const guid = config.socketRequestReply.guidGen();
@@ -104,13 +130,16 @@ export class WebSocketService extends NetworkService {
             .map(() =>
               this.socket.streamView(
                 R.compose(R.equals(guid), R.view(lens)),
-                config.socketRequestReply!.objectMaxSize,
-                config.socketRequestReply!.expiryPeriod
+                config.socketRequestReply.objectMaxSize,
+                config.socketRequestReply.expiryPeriod
               )
             )
             .map((data) => {
-              const ModelClass = config.responseClass as typeof Model;
-              return ModelClass.fromJSON(data);
+              if (config.responseClass.prototype instanceof Model) {
+                const ModelClass = config.responseClass as typeof Model;
+                return ModelClass.fromJSON(data);
+              }
+              return config.responseClass(data);
             })
             .flatten()
             .map(async (v) => {
@@ -149,8 +178,11 @@ export class WebSocketService extends NetworkService {
 
           return stream
             .map((data) => {
-              const ModelClass = config.responseClass as typeof Model;
-              return ModelClass.fromJSON(data);
+              if (config.responseClass.prototype instanceof Model) {
+                const ModelClass = config.responseClass as typeof Model;
+                return ModelClass.fromJSON(data);
+              }
+              return config.responseClass(data);
             })
             .flatten()
             .map(async (v) => {

@@ -4,11 +4,14 @@ import * as R from "ramda";
 import { Call } from "../stream/call";
 import { CallExecutionError } from "../errors";
 import { GingerSnapProps } from "./index";
-import { HTTPStatus, THROTTLE_DEFAULT_MS } from "./decorators";
+import { CachingMethod, HTTPStatus, THROTTLE_DEFAULT_MS } from "./decorators";
 import { request } from "./request";
 import { Future } from "../future";
 import { TimeableObject } from "../data-structures/object";
 import hash from "object-hash";
+import { CacheManager, Cache } from "../data/store/manager";
+import { Stream } from "../stream";
+import { Collectors } from "../stream/collector";
 
 type CredentialFunctorWithArg = (credentials: Credentials) => Call<Credentials> | Promise<Credentials> | Credentials;
 type CredentialFunctor = () => Call<Credentials> | Promise<Credentials> | Credentials;
@@ -34,6 +37,8 @@ export class NetworkService {
    * @private
    */
   private readonly retryLimit?: number;
+
+  protected readonly cacheManager: CacheManager;
 
   /**
    * Internal properties used to construct this snap service
@@ -84,11 +89,11 @@ export class NetworkService {
    */
   protected lookupCache: TimeableObject<string, any>;
 
-  constructor({ baseUrl, retryLimit }: GingerSnapProps = {}) {
+  constructor({ baseUrl, retryLimit, cacheManager }: GingerSnapProps = {}) {
     this.retryLimit = retryLimit;
     this.__internal__ = this.__internal__ ?? { classConfig: {}, methodConfig: {} };
     this.baseUrl = this.__internal__.classConfig.baseUrl ?? baseUrl ?? "";
-    this.lookupCache = new TimeableObject<string, any>();
+    this.cacheManager = cacheManager ?? new CacheManager();
   }
 
   /**
@@ -124,7 +129,28 @@ export class NetworkService {
       }
 
       const requestType: RequestType = value.requestType;
-      const cacheDuration = value.cache;
+      const cacheInfo = value.cache;
+      let cache: Cache<string, Response> | undefined;
+
+      if (cacheInfo) {
+        cache = this.cacheManager.createCache(
+          this.baseUrl,
+          cacheInfo.persist,
+          async (resp) =>
+            JSON.stringify({
+              headers: Object.fromEntries(resp.headers),
+              status: resp.status,
+              statusText: resp.statusText,
+              body: await Stream.of(resp.body).collect(Collectors.asList()),
+            }),
+          (v) => {
+            const { headers, status, statusText, body } = JSON.parse(v);
+            return new Response(Stream.of(body).readableStream, { status, statusText, headers });
+          },
+          undefined,
+          cacheInfo.duration
+        );
+      }
 
       self[key] = (...args: any[]) => {
         let url = new URL(
@@ -132,19 +158,19 @@ export class NetworkService {
             (apiPath.startsWith("/") ? apiPath : "/" + apiPath)
         );
         return new Call(
-          (signal) => {
+          async (signal) => {
             headers = { ...headers, ...this.__get_auth_headers__(auth) };
             const result = this.__constructor_call_args__(url, headers, value, args);
             headers = result.headers;
             url = result.url;
             const body = result.body;
 
-            if (cacheDuration) {
+            if (cache && cacheInfo.method === CachingMethod.HIT_FIRST) {
               let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
               if (body) {
                 key += hash(body);
               }
-              const result = this.lookupCache.get(key);
+              const result = await cache.get(key).registerSignal(signal);
 
               if (result) {
                 return result.clone();
@@ -173,27 +199,28 @@ export class NetworkService {
                 ) {
                   return Future.sleep({ milliseconds: THROTTLE_DEFAULT_MS }).thenApply(() => lookup(retries + 1));
                 }
+
+                if (cache) {
+                  let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
+                  if (resp.ok) {
+                    if (body) {
+                      key += hash(body);
+                    }
+                    cache.set(key, resp.clone());
+                  } else if (cache && !resp.ok && cacheInfo.method === CachingMethod.FALLBACK_ON_MISSING) {
+                    return cache.get(key);
+                  }
+                }
                 return resp;
               });
 
-            return lookup()
-              .thenApply(({ value }) => {
-                if (cacheDuration && value.ok) {
-                  let key = `${url.toString()}-${requestType.toString()}-${hash.sha1(headers)}`;
-                  if (body) {
-                    key += hash(body);
-                  }
-                  this.lookupCache.set(key, value.clone(), cacheDuration);
-                }
-                return value;
-              })
-              .registerSignal(signal);
+            return lookup().registerSignal(signal);
           },
           oldMethod,
           value.responseClass,
           value.throttle,
           value.responseType ?? ResponseType.NONE,
-          value.responseArray === true
+          value.responseArray
         );
       };
       this.__setup_authentication__(value, key, self[key], auth);
