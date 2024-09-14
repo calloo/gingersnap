@@ -1,0 +1,30 @@
+name: Gingersnap Builder
+run-name: ${{ gitea.actor }} is building gingersnap package
+on:
+  push:
+    tags:
+      - 'release-*'
+jobs:
+  build-package:
+    runs-on: ubuntu:latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set Up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://gitea.iamdrscript.com/api/packages/Athenamind/npm/'
+      - name: Install dependencies
+        run: npm install
+      - name: Get Meta
+        id: meta
+        run: echo REPO_VERSION=$(git describe --tags --always | sed 's/^release-//') >> $GITHUB_OUTPUT
+      - name: Build package
+        run: npm run build && cd lib
+      - name: Set release version
+        run: npm version ${{steps.meta.outputs.REPO_VERSION}}
+      - name: Publish package
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
