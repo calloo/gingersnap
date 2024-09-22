@@ -21,7 +21,7 @@ jobs:
       - name: Build package
         run: npm run build && cd lib
       - name: Set release version
-        run: npm version ${{steps.meta.outputs.REPO_VERSION}}
+        run: npm --no-git-tag-version version ${{steps.meta.outputs.REPO_VERSION}}
       - name: Configure for release
         run: npm config set registry https://gitea.iamdrscript.com/api/packages/Athenamind/npm/ && npm config set -- '//gitea.iamdrscript.com/api/packages/Athenamind/npm/:_authToken' "${{ secrets.REGISTRY_TOKEN }}"
       - name: Publish package
