@@ -18,11 +18,9 @@ jobs:
       - name: Get Meta
         id: meta
         run: echo REPO_VERSION=$(git describe --tags --always | sed 's/^release-//') >> $GITHUB_OUTPUT
-      - name: Build package
-        run: npm run build && cd lib
       - name: Set release version
         run: npm config set allow-same-version true && npm --no-git-tag-version version ${{steps.meta.outputs.REPO_VERSION}}
       - name: Configure for release
         run: npm config set registry https://gitea.iamdrscript.com/api/packages/Athenamind/npm/ && npm config set -- '//gitea.iamdrscript.com/api/packages/Athenamind/npm/:_authToken' "${{ secrets.REGISTRY_TOKEN }}"
-      - name: Publish package
-        run: npm publish
+      - name: Build package & Publish
+        run: npm run build && cd lib && npm publish
