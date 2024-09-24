@@ -234,11 +234,11 @@ export class NetworkService {
       const paramQueries = value.parameters.queries ?? {};
       const paramHeaderPairs: any = R.concat(
         R.toPairs(paramHeaders),
-        R.map((k) => [k, (paramHeaders as any)[k]], Object.getOwnPropertySymbols(paramHeaders))
+        R.map((k) => [k, (paramHeaders as any)[k]], Object.getOwnPropertySymbols(paramHeaders)) as any
       );
       const paramQueryPairs: any = R.concat(
         R.toPairs(paramQueries),
-        R.map((k) => [k, (paramQueries as any)[k]], Object.getOwnPropertySymbols(paramQueries))
+        R.map((k) => [k, (paramQueries as any)[k]], Object.getOwnPropertySymbols(paramQueries)) as any
       );
 
       R.forEach(([key, index]: [any, number]) => {

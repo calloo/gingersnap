@@ -52,7 +52,7 @@ const createRequestBodyDecorator = (type: BodyType) => (target: any, propertyKey
 const createRequestMultiBodyDecorator = (type: BodyType) => (target: any, propertyKey: string) => {
   const proto = createProps(target.constructor);
   const lens = R.lensPath(["methodConfig", propertyKey, "parameters", "body"]);
-  const changer = R.compose(R.mergeDeepLeft({ type }), R.or<any, any>(R.__, {}));
+  const changer = R.compose(R.mergeDeepLeft({ type }) as any, R.or<any, any>(R.__, {}));
   proto.__internal__ = R.over(lens, changer, proto.__internal__);
 };
 
@@ -60,7 +60,7 @@ const createRequestMultiBodyParameterDecorator =
   (key: string) => (value: string) => (target: any, propertyKey: string, parameterIndex: number) => {
     const proto = createProps(target.constructor);
     const lens = R.lensPath(["methodConfig", propertyKey, "parameters", "body", key]);
-    const changer = R.compose(R.mergeDeepLeft({ [value]: parameterIndex }), R.or<any, any>(R.__, {}));
+    const changer = R.compose(R.mergeDeepLeft({ [value]: parameterIndex }) as any, R.or<any, any>(R.__, {}));
     proto.__internal__ = R.over(lens, changer, proto.__internal__);
   };
 
@@ -117,7 +117,7 @@ export const FormUrlEncoded = createRequestMultiBodyDecorator(BodyType.FORMURLEN
 export const Headers = (value: MapOfHeaders) => (target: any, propertyKey: string) => {
   const proto = createProps(target.constructor);
   const lens = R.lensPath(["methodConfig", propertyKey, "headers"]);
-  const changer = R.compose(R.mergeDeepLeft(value), R.or<any, any>(R.__, {}));
+  const changer = R.compose(R.mergeDeepLeft(value) as any, R.or<any, any>(R.__, {}));
   proto.__internal__ = R.over(lens, changer, proto.__internal__);
 };
 
