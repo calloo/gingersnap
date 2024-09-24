@@ -192,18 +192,18 @@ export class Stream<T> implements AsyncGenerator<T> {
   }
 
   /**
-   * Stream that never gives a result
-   */
-  static forever() {
-    return new Stream<null>(() => {});
-  }
-
-  /**
    * Converts the provided value to a stream
    * @param value
    */
   static of<K>(
-    value: AsyncIterable<K> | Iterable<K> | AsyncGenerator<K> | AsyncGeneratorFunction | Future<K> | ReadableStream<K>
+    value:
+      | AsyncIterable<K>
+      | Iterable<K>
+      | ((v: AbortSignal) => AsyncGenerator<K, any, any>)
+      | AsyncGenerator<K>
+      | AsyncGeneratorFunction
+      | Future<K>
+      | ReadableStream<K>
   ): Stream<K> {
     if (value[Symbol.iterator]) {
       const iterator = value[Symbol.iterator]();
@@ -225,13 +225,25 @@ export class Stream<T> implements AsyncGenerator<T> {
       });
     }
 
-    const iterator = value instanceof Function ? value() : value[Symbol.asyncIterator]();
+    const getIterator =
+      value instanceof Function
+        ? R.once((v: AbortSignal) => value(v))
+        : R.once((v: AbortSignal) => value[Symbol.asyncIterator]());
+
     return new Stream<K>(async (signal) => {
       if (!signal.aborted) {
+        const iterator = getIterator(signal);
         const { value, done } = await iterator.next();
         return new ExecutorState(done, value) as any;
       }
     });
+  }
+
+  /**
+   * Stream that never gives a result
+   */
+  static forever() {
+    return new Stream<null>(() => {});
   }
 
   get isParallel() {
@@ -310,13 +322,13 @@ export class Stream<T> implements AsyncGenerator<T> {
    * Filters data on the stream using the callback provided
    * @param callback
    */
-  filter(callback: (v: T) => boolean | Promise<boolean>): Stream<T> {
+  filter(callback: (v: T) => boolean | Promise<boolean> | Future<boolean>): Stream<T> {
     this.actions.push({
       type: ActionType.FILTER,
       functor: async (v) => {
         if (v instanceof FutureResult) v = v.value;
         let result = callback(v);
-        if (result instanceof Promise) result = await result;
+        if (result instanceof Promise || result instanceof Future) result = await result;
         if (result) return v;
         return null as T;
       },

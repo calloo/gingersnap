@@ -27,6 +27,7 @@ export default (options) => {
     "data/bus": "./src/data/bus.ts",
     "data/value": "./src/data/AtomicValue.ts",
     store: "./src/data/store/index.ts",
+    functools: "./src/functools/index.ts",
   };
 
   return [
