@@ -25,7 +25,6 @@ export default (options) => {
     "data/decoders": "./src/data/decoders/index.ts",
     "data/model": "./src/data/model/index.ts",
     "data/bus": "./src/data/bus.ts",
-    "data/observable": "./src/data/observable.ts",
     "data/value": "./src/data/AtomicValue.ts",
     store: "./src/data/store/index.ts",
     functools: "./src/functools/index.ts",
