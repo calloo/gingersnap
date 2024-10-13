@@ -30,21 +30,6 @@ export class DataBus<T = any> extends Observable<T> {
   }
 
   /**
-   * Provides a Request-Reply model by sending data over the given topic, and
-   * await a response over the second topic provided.
-   * @param reqTopic
-   * @param replyTopic
-   * @param data
-   * @param timeout how long to wait for a response, defaults to 15 seconds
-   */
-  request(reqTopic: string, replyTopic: string, data: T, timeout: WaitPeriod = { seconds: 15 }): Future<T> {
-    this.publish(reqTopic, data);
-    return Future.waitFor(this.subscribe(replyTopic, 2).future, timeout).thenApply(
-      ({ value }) => value.data
-    ) as Future<T>;
-  }
-
-  /**
    * Redirects incoming messages from a particular consumer to one or more other
    * consumers
    * @param topic used to listen to specific incoming message
