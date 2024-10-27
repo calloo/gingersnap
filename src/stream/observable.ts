@@ -1,6 +1,8 @@
 import { Stream } from "./index";
 import { Future, WaitPeriod } from "../future";
 import { Queue } from "../data-structures/object";
+import { Signal } from "../data/signal";
+import { Sign } from "node:crypto";
 
 /**
  * Provides a Publisher-Subscriber service around an event stream
@@ -25,6 +27,10 @@ export abstract class Observable<T> {
     bufferSize?: number,
     expiryPeriod?: WaitPeriod
   ): Stream<{ topic: string; data: T }>;
+
+  signal(topic: string | RegExp) {
+    return new Signal(this.subscribe(topic).map((v) => v.data)) as Signal<T>;
+  }
 
   /**
    * Pull data off a stream and publishes it
