@@ -1,6 +1,6 @@
 {
   "name": "gingersnap",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "A general purpose library built with the aim of filling the gaps of javascript shortcomings",
   "main": "index.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "compile": "tsc",
     "docs:internal:build": "typedoc",
     "docs:external:dev": "vitepress dev docs/external",
-    "docs:external:build": "vitepress build docs/external",
+    "docs:external:build": "vitepress build docs/external && cp -r docs/external/images public/images",
     "docs:external:preview": "vitepress preview docs/external"
   },
   "repository": {

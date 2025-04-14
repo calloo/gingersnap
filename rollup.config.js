@@ -56,7 +56,7 @@ export default (options) => {
           description,
           dependencies,
           version: options?.releaseVersion ?? version,
-          modules: Object.keys(input),
+          modules: input,
         }),
         typescript(),
       ],

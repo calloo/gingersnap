@@ -9,75 +9,78 @@ tutorial, you will understand how to use gingersnap to:
 
 ## Step 1: Project Setup
 
-Create and change into new directory
-
-```bash
-mkdir gingersnap-startup && cd gingersnap-startup
-```
-
-Initialize node project
+Install gingersnap and create a vite project
 
 ::: code-group
 ```bash [npm]
-npm init
-```
-
-```bash [yarn]
-yarn init
-```
-
-```bash [pnpm]
-pnpm init
-```
-:::
-
-Install typescript and gingersnap
-
-::: code-group
-```bash [npm]
-npm install --save-dev typescript
 npm install --save gingersnap
+npm create vite@latest my-gingersnap
+npm i -D vite-plugin-swc-transform
 ```
 
 ```bash [npm]
-yarn install --save-dev typescript
 yarn install --save gingersnap
+yarn create vite@latest my-gingersnap
+yarn i -D vite-plugin-swc-transform
 ```
 
 ```bash [pnpm]
-pnpm install --save-dev typescript
 pnpm install --save gingersnap
+pnpm create vite@latest my-gingersnap
+pnpm i -D vite-plugin-swc-transform
 ```
 :::
 
-Setup tsconfig.json with target of es2015 and emit decorator metadata enabled and disable null checks.
+Open **my-gingersnap** project in your favor text editor. Update tsconfig.json to support TS decorators
 ```json
 {
   "compilerOptions": {
-    "module": "ESNext",
-    "noImplicitAny": false,
-    "moduleResolution": "node",
-    "preserveConstEnums": true,
-    "sourceMap": true,
-    "strict": true,
+    "target": "ES2020",
+    "useDefineForClassFields": true,
     "experimentalDecorators": true,
-    "esModuleInterop": true,
     "emitDecoratorMetadata": true,
-    "resolveJsonModule": true,
-    "strictNullChecks": false,
-    "target": "es6",
-    "declaration": true,
-    "lib": [
-        "dom",
-        "dom.iterable",
-        "esnext"
-    ],
-    "allowSyntheticDefaultImports": true,
-    "allowJs": true
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src"
+  ]
 }
+```
+
+Create a vite config to use plugin that will support TS decorators
+```js
+import {defineConfig} from "vite";
+import swc from "vite-plugin-swc-transform";
+
+export default defineConfig({
+    plugins: [
+        swc({
+            swcOptions: {
+                jsc: {
+                    target: "ES2021",
+                    transform: {
+                        legacyDecorator: true,
+                        decoratorMetadata: true,
+                    },
+                },
+            },
+        }),
+    ],
+});
 ```
 
 ## Step 2: Setup Data Model
@@ -193,7 +196,9 @@ async function main() {
     const posts = await postService.getPosts().execute();
     console.log('Received the following posts..');
     posts.forEach(post => {
-       console.log(`${post.id}. Title - ${post.title} Body - ${post.body}`); 
+        const tag = document.createElement('p');
+        tag.innerHTML = `<p>${post.id}. Title - ${post.title} Body - ${post.body}</p>`;
+       document.body.append(tag)
     });
 }
 

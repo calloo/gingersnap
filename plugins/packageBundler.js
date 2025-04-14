@@ -3,7 +3,7 @@ import path from "path";
 
 /**
  * bundles package.json file
- * @param {({name: string; version: string; description?: string; dependencies: Array<{[string: string]: any}>, author?: string; main?: string;modules: Array<string>})} packageDetails
+ * @param {({name: string; version: string; description?: string; dependencies: Array<{[string: string]: any}>, author?: string; main?: string;modules: Object})} packageDetails
  * @returns {{generateBundle(*, *, *): void, name: string}}
  */
 export default function packageBundler(packageDetails) {
@@ -27,13 +27,16 @@ export default function packageBundler(packageDetails) {
             author: packageDetails.author,
             main: packageDetails.main,
             exports: Object.fromEntries(
-              packageDetails.modules.map((mod) => [
-                `./${mod}`,
-                {
-                  import: { types: `./${mod}.d.ts`, default: `./${mod}.mjs` },
-                  require: { types: `./${mod}.d.ts`, default: `./${mod}.cjs` },
-                },
-              ])
+              Object.entries(packageDetails.modules).map(([mod, path]) => {
+                const typesPath = path.endsWith("index.ts") ? `./${mod}/index.d.ts` : `./${mod}.d.ts`;
+                return [
+                  `./${mod}`,
+                  {
+                    import: { types: typesPath, default: `./${mod}.mjs` },
+                    require: { types: typesPath, default: `./${mod}.cjs` },
+                  },
+                ];
+              })
             ),
           })
         );
