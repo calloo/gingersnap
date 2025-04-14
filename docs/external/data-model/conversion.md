@@ -11,7 +11,7 @@ described below.
 
 ```ts
 // src/profile.model.ts
-import { Field, Model } from "@cookienerds/gingersnap/data/model";
+import { Field, Model } from "gingersnap/data/model";
 
 export class UserProfile extends Model {
     @Field() 
@@ -78,6 +78,7 @@ You can also construct from XML string by passing the [Data Format](https://cook
 ```ts
 // src/main.ts
 import { UserProfilePage } from "./profile.model";
+import {DataFormat} from "gingersnap/data/model";
 
 function main() {
     const profile: UserProfilePage = UserProfilePage.fromString(`
@@ -86,7 +87,7 @@ function main() {
             <profilePicture>https://example.site.com/user/1/photo/profile.png</profilePicture>
             <bioLink>https://example.site.com/user/1/bio.html</bioLink>
           </profile>
-          `);
+          `, DataFormat.XML);
 }
 
 main();
@@ -122,7 +123,7 @@ for [fromBlob](https://cookienerd-frameworks.gitlab.io/gingersnap/internal/class
 and [fromBuffer](https://cookienerd-frameworks.gitlab.io/gingersnap/internal/classes/annotations_model_model.Model.html#fromBuffer)
 
 ```ts
-// from @cookienerds/gingersnap/data/model
+// from gingersnap/data/model
 export enum DataFormat {
   AVRO,
   CSV,
@@ -136,7 +137,7 @@ export enum DataFormat {
 ```ts
 // src/main.ts
 import { UserProfilePage } from "./profile.model";
-import { DataFormat } from '@cookienerds/gingersnap/data/model';
+import { DataFormat } from 'gingersnap/data/model';
 
 function main (data: Blob) {
   const profile: UserProfilePage = UserProfilePage.fromBlob(data, DataFormat.MESSAGE_PACK);

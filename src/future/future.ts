@@ -431,7 +431,7 @@ export class Future<T> {
    * @private
    */
   then(onFulfilled: (v: T) => void, onRejected: (reason: unknown) => void) {
-    return this.__run__(onFulfilled, onRejected);
+    this.__run__(onFulfilled, onRejected).catch(() => {});
   }
 
   /**
@@ -478,27 +478,17 @@ export class Future<T> {
           }
           return result;
         })
-        .then((v) => {
-          onFulfilled?.(v);
-          return v;
-        })
         .catch(async (error) => {
           const handler = this.findFailureHandler();
           if (!handler) {
             if (!(error instanceof Error)) {
               error = new FutureError(error);
             }
-            onRejected?.(error);
             throw error;
           }
 
-          try {
-            const result = await this.postResultProcessing(handler(error));
-            return await resolvePromise(Promise.resolve(result));
-          } catch (e) {
-            onRejected?.(e);
-            throw e;
-          }
+          const result = await this.postResultProcessing(handler(error));
+          return await resolvePromise(Promise.resolve(result));
         });
     };
     this.underLyingPromise = resolvePromise(
@@ -575,6 +565,7 @@ export class Future<T> {
     )
       .then((v) => {
         this.completedResult = v;
+        onFulfilled?.(v);
         return v;
       })
       .catch((e) => {
@@ -586,6 +577,7 @@ export class Future<T> {
       })
       .catch((e) => {
         this.failureResult = e instanceof Error ? e : new Error(String(e));
+        onRejected?.(this.failureResult);
         throw this.failureResult;
       })
       .finally(() => {

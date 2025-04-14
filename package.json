@@ -1,6 +1,6 @@
 {
   "name": "gingersnap",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "A general purpose library built with the aim of filling the gaps of javascript shortcomings",
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "publish": "cd lib && npm publish",
     "lint": "eslint",
     "test": "NODE_OPTIONS=--unhandled-rejections=warn jest",
+    "test:win": "set NODE_OPTIONS=--unhandled-rejections=warn && jest",
     "test-with-coverage": "NODE_OPTIONS=--unhandled-rejections=warn jest --coverage",
     "compile": "tsc",
     "docs:internal:build": "typedoc",
@@ -24,7 +25,7 @@
     "url": "https://gitea.iamdrscript.com/CookieNerds/Gingersnap/issues"
   },
   "type": "module",
-  "homepage": "https://gitea.iamdrscript.com/CookieNerds/Gingersnap#readme",
+  "homepage": "https://calloo.github.io/gingersnap",
   "devDependencies": {
     "@mxssfd/typedoc-theme": "^1.0.3",
     "@types/jest": "^29.2.4",

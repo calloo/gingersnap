@@ -13,8 +13,8 @@ hero:
       text: Get Started
       link: /introduction/what-is-gingersnap
     - theme: alt
-      text: View on GitLab
-      link: https://gitlab.com/cookienerd-frameworks/gingersnap
+      text: View on Github
+      link: https://github.com/calloo/gingersnap
 
 features:
     - icon:

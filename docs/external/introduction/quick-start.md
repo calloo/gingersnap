@@ -31,29 +31,22 @@ pnpm init
 ```
 :::
 
-To install gingersnap, you need to access the custom NPM repository of CookieNerds hosted on GitLab.
-Create a .npmrc file and replace **AUTH_TOKEN** with the auth token created for you by a CookieNerds employee.
-```text
-@cookienerds:registry=https://gitlab.com/api/v4/groups/12516153/-/packages/npm/
-//gitlab.com/api/v4/groups/12516153/-/packages/npm/:_authToken="<AUTH_TOKEN>"
-```
-
 Install typescript and gingersnap
 
 ::: code-group
 ```bash [npm]
 npm install --save-dev typescript
-npm install --save @cookienerds/gingersnap
+npm install --save gingersnap
 ```
 
 ```bash [npm]
 yarn install --save-dev typescript
-yarn install --save @cookienerds/gingersnap
+yarn install --save gingersnap
 ```
 
 ```bash [pnpm]
 pnpm install --save-dev typescript
-pnpm install --save @cookienerds/gingersnap
+pnpm install --save gingersnap
 ```
 :::
 
@@ -63,26 +56,26 @@ Setup tsconfig.json with target of es2015 and emit decorator metadata enabled an
   "compilerOptions": {
     "module": "ESNext",
     "noImplicitAny": false,
-    "moduleResolution": "NodeNext",
+    "moduleResolution": "node",
     "preserveConstEnums": true,
+    "sourceMap": true,
     "strict": true,
-    "declaration": true,
     "experimentalDecorators": true,
-    "strictNullChecks": false,
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
-    "target": "es2015",
-    "outDir": "lib",
+    "strictNullChecks": false,
+    "target": "es6",
+    "declaration": true,
     "lib": [
-      "dom",
-      "es2015",
-      "esnext"
+        "dom",
+        "dom.iterable",
+        "esnext"
     ],
     "allowSyntheticDefaultImports": true,
     "allowJs": true
   },
-  "include": ["src/**/*", "tests/**/*"],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }
 ```
@@ -114,7 +107,7 @@ decorator.
 
 ```ts
 // src/post.model.ts
-import { Field, Model } from "@cookienerds/gingersnap/data/model";
+import { Field, Model } from "gingersnap/data/model";
 
 export class Post extends Model {
     @Field() // maps the "id" field in the post JSON data to the id property
@@ -163,14 +156,14 @@ import {
   JSONResponse, 
   GET,
   NetworkService,
-} from "@cookienerds/gingersnap/networking";
-import { Stream } from "@cookienerds/gingersnap/stream";
+} from "gingersnap/networking";
+import { Stream } from "gingersnap/stream";
 import { Post } from "./post.model";
 
 export class PostService extends NetworkService {
-  @JSONResponse({ modelType: Post }) // accept JSON response and convert it to Post instance
+  @JSONResponse({ modelType: Post, isArray: true }) // accept JSON response and convert it to Post instance
   @GET("/posts") // sends a GET reques to path /posts
-  getPosts(): Stream<Post> { // returns a stream that produces Post instances
+  getPosts(): Stream<Post[]> { // returns a stream that produces Post instances
     return PASS; // placeholder to suppress typescript warnings, as the logic is described not implemented
   }
 }
@@ -188,7 +181,7 @@ We need to create an instance of the PostService. For this, we need to create a
 call creates the service and sets the baseUrl to https://jsonplaceholder.typicode.com.
 ```ts
 // src/main.ts
-import { GingerSnap } from "@cookienerds/gingersnap/networking";
+import { GingerSnap } from "gingersnap/networking";
 import { PostService } from "./post.service";
 
 async function main() {

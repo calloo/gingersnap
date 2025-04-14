@@ -65,7 +65,10 @@ export class Callable<
     if (Array.isArray(json) && this.arrayResponseSupport && this.ModelClass?.name === String.name) {
       return json.map((v) => (typeof v !== "string" ? String(v) : v)) as T;
     }
-    const invoker = this.ModelClass.prototype instanceof Model ? (this.ModelClass as any).fromJSON : this.ModelClass;
+    const invoker =
+      this.ModelClass.prototype instanceof Model
+        ? (this.ModelClass as any).fromJSON.bind(this.ModelClass)
+        : this.ModelClass;
 
     if ((json instanceof Array || Array.isArray(json)) && this.arrayResponseSupport) {
       return json.map((v) => invoker(v)) as T;

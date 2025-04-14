@@ -135,7 +135,10 @@ export class Queue<T> extends WatchableObject<number, T> implements Iterator<T> 
           };
         } catch (e) {
           if (e instanceof ValueDestroyedError) {
-            throw new FutureCancelled();
+            return {
+              done: true,
+              value: null,
+            };
           }
           throw e;
         }

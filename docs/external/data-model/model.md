@@ -7,7 +7,7 @@ Let's walk through a few examples of modelling various data in gingersnap.
 If you need a property that holds an array, you must use the **@ArrayField** decorator. This decorator expects the class
 type of the items being stored in the array. Please note, a property can also be of type Model
 ```ts
-import { ArrayField, Field, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field()
@@ -24,7 +24,7 @@ If the field name in your data needs to be mapped to a different field name, you
 decorator
 
 ```ts
-import { ArrayField, Field, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field()
@@ -53,7 +53,7 @@ new Date(\<string\>) can be processed
 ```
 
 ```ts
-import { ArrayField, Field, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field() 
@@ -75,7 +75,7 @@ export class User extends Model {
 You can use **@Ignore** Property for fields that are optional. If they don't exist, an error should not be thrown
 
 ```ts
-import { ArrayField, Field, Ignore, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Ignore, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field() 
@@ -100,7 +100,7 @@ export class User extends Model {
 passed, it defaults to @Ignore({deserialize: true})
 
 ```ts
-// from @cookienerds/gingersnap/data/model for @Ignore
+// from gingersnap/data/model for @Ignore
 export interface IgnoreProp { 
     serialize?: boolean; // Remove when converting back to string or bytes
     deserialize?: boolean; // Optional when constructing
@@ -108,7 +108,7 @@ export interface IgnoreProp {
 ```
 
 ```ts
-import { ArrayField, Field, Ignore, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Ignore, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field() 
@@ -142,7 +142,7 @@ value of the key extracted from the data. @Ignore decorator also works on comput
 ```
 
 ```ts
-import { Field, Model } from "@cookienerds/gingersnap/data/model";
+import { Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   updatedAt!: Date;
@@ -164,7 +164,7 @@ export class User extends Model {
 
 Models can be extended by creating a subclass of a model class
 ```ts
-import { Field, Model } from "@cookienerds/gingersnap/data/model";
+import { Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   updatedAt!: Date;
@@ -196,7 +196,7 @@ export class UserProfile extends User {
 You can use **@Alias** decorator for properties that may have different names depending on the data source being read
 
 ```ts
-import { Alias, Field, Model } from "@cookienerds/gingersnap/data/model";
+import { Alias, Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field() 
@@ -214,7 +214,7 @@ export class User extends Model {
 You can set default values for properties if they don't exist. Thus, the exclamation sign (!) would not be required.
 
 ```ts
-import { ArrayField, Field, Model } from "@cookienerds/gingersnap/data/model";
+import { ArrayField, Field, Model } from "gingersnap/data/model";
 
 export class User extends Model {
   @Field()

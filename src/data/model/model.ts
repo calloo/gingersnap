@@ -95,9 +95,9 @@ export class Optional<T> {
   /**
    * If a value is present in this Optional, returns the value, otherwise throws NoSuchElement.
    */
-  get() {
+  get(): T {
     if (this.isPresent()) {
-      return this.value as T;
+      return this.value;
     }
 
     throw new NoSuchElement();

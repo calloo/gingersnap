@@ -8,7 +8,7 @@ The result returned from a stream can be a Promise, Future, another Stream, Exec
 resolved to the actual value, and Streams will be processed until it ends.
 
 ```ts
-import { Stream, ExecutorState } from "@cookienerds/gingersnap/stream";
+import { Stream, ExecutorState } from "gingersnap/stream";
 
 let userId = 0;
 const postStream = new Stream((signal) => {
@@ -37,7 +37,7 @@ getPostsByUser();
 You can also create a stream from any object that implements [Symbol.iterator] (E.g. arrays), async generators, implements [Symbol.asyncIterator] or a 
 future.
 ```ts
-import { Stream } from "@cookienerds/gingersnap/stream";
+import { Stream } from "gingersnap/stream";
 
 // stream from an iterable
 for await (let num of Stream.of([1,2,3,4,5])) {

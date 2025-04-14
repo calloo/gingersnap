@@ -1,6 +1,6 @@
 import {version} from '../../../package.json';
 export default {
-  title: 'CookieNerds GingerSnap',
+  title: 'GingerSnap',
   description: 'A networking library with strong data handling and manipulation support',
   cleanUrls: true,
   outDir: '../../public',
@@ -12,23 +12,17 @@ export default {
       {
         icon: {
           svg: `
-        <svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path class="tanuki-shape tanuki" d="m24.507 9.5-.034-.09L21.082.562a.896.896 0 0 0-1.694.091l-2.29 7.01H7.825L5.535.653a.898.898 0 0 0-1.694-.09L.451 9.411.416 9.5a6.297 6.297 0 0 0 2.09 7.278l.012.01.03.022 5.16 3.867 2.56 1.935 1.554 1.176a1.051 1.051 0 0 0 1.268 0l1.555-1.176 2.56-1.935 5.197-3.89.014-.01A6.297 6.297 0 0 0 24.507 9.5Z" fill="#E24329"></path>
-          <path class="tanuki-shape right-cheek" d="m24.507 9.5-.034-.09a11.44 11.44 0 0 0-4.56 2.051l-7.447 5.632 4.742 3.584 5.197-3.89.014-.01A6.297 6.297 0 0 0 24.507 9.5Z" fill="#FC6D26"></path>
-          <path class="tanuki-shape chin" d="m7.707 20.677 2.56 1.935 1.555 1.176a1.051 1.051 0 0 0 1.268 0l1.555-1.176 2.56-1.935-4.743-3.584-4.755 3.584Z" fill="#FCA326"></path>
-          <path class="tanuki-shape left-cheek" d="M5.01 11.461a11.43 11.43 0 0 0-4.56-2.05L.416 9.5a6.297 6.297 0 0 0 2.09 7.278l.012.01.03.022 5.16 3.867 4.745-3.584-7.444-5.632Z" fill="#FC6D26"></path>
+        <svg height="32" aria-hidden="true" viewBox="0 0 24 24" version="1.1" width="32" data-view-component="true" class="octicon octicon-mark-github v-align-middle">
+            <path d="M12 1C5.9225 1 1 5.9225 1 12C1 16.8675 4.14875 20.9787 8.52125 22.4362C9.07125 22.5325 9.2775 22.2025 9.2775 21.9137C9.2775 21.6525 9.26375 20.7862 9.26375 19.865C6.5 20.3737 5.785 19.1912 5.565 18.5725C5.44125 18.2562 4.905 17.28 4.4375 17.0187C4.0525 16.8125 3.5025 16.3037 4.42375 16.29C5.29 16.2762 5.90875 17.0875 6.115 17.4175C7.105 19.0812 8.68625 18.6137 9.31875 18.325C9.415 17.61 9.70375 17.1287 10.02 16.8537C7.5725 16.5787 5.015 15.63 5.015 11.4225C5.015 10.2262 5.44125 9.23625 6.1425 8.46625C6.0325 8.19125 5.6475 7.06375 6.2525 5.55125C6.2525 5.55125 7.17375 5.2625 9.2775 6.67875C10.1575 6.43125 11.0925 6.3075 12.0275 6.3075C12.9625 6.3075 13.8975 6.43125 14.7775 6.67875C16.8813 5.24875 17.8025 5.55125 17.8025 5.55125C18.4075 7.06375 18.0225 8.19125 17.9125 8.46625C18.6138 9.23625 19.04 10.2125 19.04 11.4225C19.04 15.6437 16.4688 16.5787 14.0213 16.8537C14.42 17.1975 14.7638 17.8575 14.7638 18.8887C14.7638 20.36 14.75 21.5425 14.75 21.9137C14.75 22.2025 14.9563 22.5462 15.5063 22.4362C19.8513 20.9787 23 16.8537 23 12C23 5.9225 18.0775 1 12 1Z"></path>
         </svg>
         `
         },
-        link: 'https://gitlab.com/cookienerd-frameworks/gingersnap'
+        link: 'https://github.com/calloo/gingersnap'
       }
     ],
     editLink: {
       pattern: 'https://gitlab.com/cookienerd-frameworks/gingersnap/-/edit/main/docs/external/:path',
-      text: 'Edit this page on Gitlab'
-    },
-    footer: {
-      copyright: 'Copyright © CookieNerds LLC 2020-present'
+      text: 'Edit this page on Gitea'
     },
     nav: [
       { text: 'Guide', link: '/introduction/what-is-gingersnap' },
@@ -36,7 +30,7 @@ export default {
       {
         text: version,
         items: [
-          { text: version, link: 'https://gitlab.com/cookienerds-area/npm-repository/-/packages/12607033' },
+          { text: version, link: 'https://www.npmjs.com/package/gingersnap' },
           { text: 'ChangeLog', link: 'https://gitlab.com/cookienerd-frameworks/gingersnap/-/blob/main/CHANGELOG.md' },
         ]
       }
@@ -76,39 +70,40 @@ export default {
           {text: 'Lock', link: '/synchronization/lock'},
         ]
       },
-      {
-        text: 'Data Structures',
-        collapsed: true,
-        items: [
-          {
-            text: 'Arrays',
-            collapsed: true,
-            items: [
-              {text: 'Cyclical List', link: '/data-structures/arrays/cyclical-list'},
-              {text: 'Stack', link: '/data-structures/arrays/stack'},
-            ]
-          },
-          {
-            text: 'Objects',
-            collapsed: true,
-            items: [
-              {text: 'Cyclical Object', link: '/data-structures/objects/cyclical-object'},
-              {text: 'Timeable Object', link: '/data-structures/objects/timeable-object'},
-              {text: 'Waitable Object', link: '/data-structures/objects/waitable-object'},
-              {text: 'Watchable Object', link: '/data-structures/objects/watchable-object'},
-              {
-                text: 'Queues',
-                collapsed: true,
-                items: [
-                  {text: 'Simple Queue', link: '/data-structures/queues/simple-queue'},
-                  {text: 'Standard Queue', link: '/data-structures/queues/standard-queue'},
-                  {text: 'Buffer', link: '/data-structures/queues/buffer'},
-                ]
-              }
-            ]
-          }
-        ]
-      }
+//      Disable for now
+//      {
+//        text: 'Data Structures',
+//        collapsed: true,
+//        items: [
+//          {
+//            text: 'Arrays',
+//            collapsed: true,
+//            items: [
+//              {text: 'Cyclical List', link: '/data-structures/arrays/cyclical-list'},
+//              {text: 'Stack', link: '/data-structures/arrays/stack'},
+//            ]
+//          },
+//          {
+//            text: 'Objects',
+//            collapsed: true,
+//            items: [
+//              {text: 'Cyclical Object', link: '/data-structures/objects/cyclical-object'},
+//              {text: 'Timeable Object', link: '/data-structures/objects/timeable-object'},
+//              {text: 'Waitable Object', link: '/data-structures/objects/waitable-object'},
+//              {text: 'Watchable Object', link: '/data-structures/objects/watchable-object'},
+//              {
+//                text: 'Queues',
+//                collapsed: true,
+//                items: [
+//                  {text: 'Simple Queue', link: '/data-structures/queues/simple-queue'},
+//                  {text: 'Standard Queue', link: '/data-structures/queues/standard-queue'},
+//                  {text: 'Buffer', link: '/data-structures/queues/buffer'},
+//                ]
+//              }
+//            ]
+//          }
+//        ]
+//      }
     ]
   }
 }

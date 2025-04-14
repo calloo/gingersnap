@@ -5,11 +5,16 @@ import { Collectors } from "../../../src/stream/collector";
 import { Future } from "../../../src/future";
 import { FutureEvent } from "../../../src/synchronize";
 
+interface Name {
+  firstName: string;
+  lastName: string;
+}
+
 describe("Stream", () => {
   it("should bulk transform data", async () => {
     const result = await Stream.of(userData.users)
-      .map(R.pick(["firstName", "lastName"]))
-      .map((v) => v.firstName + " " + v.lastName)
+      .map(R.pick(["firstName", "lastName"]) as (v: any) => Name)
+      .map((v: Name) => v.firstName + " " + v.lastName)
       .chunk(2)
       .map((users) => users[0] + " and " + users[1])
       .skip(4)

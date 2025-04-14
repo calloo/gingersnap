@@ -178,7 +178,11 @@ export class NetworkService {
             }
 
             const lookup = (retries = 0) =>
-              request(url, { headers, method: requestType.toString(), body }).thenApply(async ({ value: resp }) => {
+              request(url, {
+                headers,
+                method: requestType.toString(),
+                body,
+              }).thenApply(async ({ value: resp }) => {
                 let credentials: Credentials | undefined;
                 if (
                   resp.status === HTTPStatus.UNAUTHORIZED &&

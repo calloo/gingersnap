@@ -11,7 +11,7 @@ operation upon creation. They have to be explicitly run by:
 - calling the **schedule** method, which runs the future in the background (also returns the same future)
 - awaiting the future.
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // creating a future does not execute it
 const future = new Future<number>((resolve, reject) => {
@@ -36,8 +36,8 @@ listen when it's cancelled and perform the necessary cancellation operation. If 
 the future is force cancelled with calls to resolve and reject having no effect.
 
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
-import { FutureCancelled } from "@cookienerds/gingersnap/errors";
+import { Future } from "gingersnap/future";
+import { FutureCancelled } from "gingersnap/errors";
 
 // creating a future does not execute it
 const future = new Future<number>((resolve, reject, signal) => {
@@ -80,7 +80,7 @@ console.log(`If it completed, the result is `, future.result);
 ## Chaining Futures
 Futures can be chained using the **thenApply** method. The callback is then provided with a **FutureResult**
 object that contains the **value** of the executed future, and the **signal** to handle any cancel event. thenApply by
-default modifies the existing future (for faster performance, no object cloning like what is done in Promises), but can
+default modifies the existing future (for faster performance), but can
 be cloned if 2nd argument of **true** is passed. Given the signal is passed down the chain, we can provide deeply nested 
 operations with the ability to listen to cancellation.
 ```ts
@@ -149,7 +149,7 @@ controller.abort(); // cancelling future from an external signal  // [!code focu
 Futures make's it easier to handle sleeping operations. You can always cancel the sleep using the **cancel** method.
 
 ```ts
-// from @cookienerds/gingersnap/future
+// from gingersnap/future
 export interface WaitPeriod {
   minutes?: number;
   seconds?: number;
@@ -159,7 +159,7 @@ export interface WaitPeriod {
 ```
 
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // pass the WaitPeriod to the Future or the number of seconds (WaitPeriod | number)
 const future = Future.sleep({seconds: 5})
@@ -175,8 +175,8 @@ WaitPeriod, and if it doesn't complete before that time, you cancel the future. 
 future.
 
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
-import { FutureCancelled } from "@cookienerds/gingersnap/errors";
+import { Future } from "gingersnap/future";
+import { FutureCancelled } from "gingersnap/errors";
 
 // Alternative to new Future((resolve, reject, signal) => {..})
 const userIdFuture = Future.of((resolve, reject, signal) => {
@@ -203,7 +203,7 @@ try {
 
 You can schedule a future to execute in background, without having to await the future
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 const userIdFuture = Future.of((resolve, reject, signal) => {
   fetch('https://jsonplaceholder.typicode.com/posts/1', { signal })
@@ -222,7 +222,7 @@ const future = userIdFuture.schedule();
 
 You can create a completed future similar to Promise.resolve.
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 const future = Future.completed(5).thenApply(result => {
   console.log(`Future completed with number ${result.value}`);
@@ -235,7 +235,7 @@ future.schedule();
 
 You can create a failed future similar to Promise.reject.
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 const future = Future.exceptionally(new Error('something went wrong'));
 
@@ -247,7 +247,7 @@ console.log(`Future failed? ${future.failed ? 'Yes': 'No'}`);
 
 You can convert Promises to a future using the **Future.wrap** method
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // Future from a promise
 const future = Future.wrap(Promise.resolve(5)).thenApply(result => {
@@ -260,7 +260,7 @@ future.schedule();
 
 ## Checking for the first completed future
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // Future from a promise
 const future1 = Future.sleep(5).thenApply(() => 5);
@@ -276,7 +276,7 @@ Future.firstCompleted([future1, future2])
 ## Checking for all results
 Futures can be collected as an array, yielding an array of the result of each future
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // Future from a promise
 const future1 = Future.sleep(5).thenApply(() => 5);
@@ -294,7 +294,7 @@ Future.collect([future1, future2])
 Once all futures are settled, the array of futures is returned. Each future can then be checked to see
 if it completed successfully or failed
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 // Future from a promise
 const future1 = Future.sleep(5).thenApply(() => 5);
@@ -322,7 +322,7 @@ provide async functions to thenApply or even pass async function to creating a n
 any asynchronous operation should be able to propagate management to higher levels, where cancellation can take place when needed.
 
 ```ts
-import { Future } from "@cookienerds/gingersnap/future";
+import { Future } from "gingersnap/future";
 
 const future = Future.of(async (resolve, reject, signal) => {
   const resp = await fetch('https://jsonplaceholder.typicode.com/posts/1', { signal });
