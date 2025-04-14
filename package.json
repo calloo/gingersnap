@@ -1,7 +1,7 @@
 {
-  "name": "@cookienerds/gingersnap",
+  "name": "gingersnap",
   "version": "0.22.0",
-  "description": "library for handling data locally and over the network",
+  "description": "A general purpose library built with the aim of filling the gaps of javascript shortcomings",
   "main": "index.js",
   "scripts": {
     "build": "rollup -c",
@@ -17,14 +17,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/cookienerd-frameworks/gingersnap.git"
+    "url": "git+https://gitea.iamdrscript.com/CookieNerds/Gingersnap.git"
   },
   "author": "CookieNerds LLC",
   "bugs": {
-    "url": "https://gitlab.com/cookienerd-frameworks/gingersnap/issues"
+    "url": "https://gitea.iamdrscript.com/CookieNerds/Gingersnap/issues"
   },
   "type": "module",
-  "homepage": "https://gitlab.com/cookienerd-frameworks/gingersnap#readme",
+  "homepage": "https://gitea.iamdrscript.com/CookieNerds/Gingersnap#readme",
   "devDependencies": {
     "@mxssfd/typedoc-theme": "^1.0.3",
     "@types/jest": "^29.2.4",
