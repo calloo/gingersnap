@@ -2,19 +2,10 @@
 
 
 ## Description
-Gingersnap is a library for managing network requests, data serialization/deserialization and data validation all with minimal code
-
+Gingersnap is a general purpose library built with the aim of filling the gaps of javascript shortcomings. First-Class support for networking, IO operations and data validation is at the core of this library.
 
 ## Installation
-To use as an NPM package in a project:
-1. Request a token for connection to the CookieNerds NPM Area
-2. Create a .npmrc file inside your project and add the following <br />
-   `@cookienerds:registry=https://gitlab.com/api/v4/projects/31753272/packages/npm/` <br />
-   `//gitlab.com/api/v4/projects/31753272/packages/npm/:_authToken="MY_TOKEN_HERE"`
-3. To install the package, run `npm install @cookienerds/gingersnap`
-
-## Support
-For support, please contact <a href="mailto:dev@cookienerds.com">dev@cookienerds.com</a>
+To install the package, run `npm install gingersnap`
 
 ## Roadmap
 - Support request timeout
