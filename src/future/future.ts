@@ -111,7 +111,7 @@ export class Future<T> {
 
     return Future.of<K>(
       (resolve, reject) =>
-        Promise.race([timeableFuture, value.run()])
+        Promise.race([timeableFuture, value])
           .then((v) => {
             if (value.done) {
               timeableFuture.cancel();
@@ -158,21 +158,30 @@ export class Future<T> {
    * @param value
    */
   public static completed<T>(value: T) {
-    return new Future<T>((resolve) => resolve(value));
+    const future = new Future<T>(() => {});
+    future.underLyingPromise = Promise.resolve(value);
+    future.completedResult = value;
+    future.fulfilled = true;
+    future.isRunning = false;
+    return future;
   }
 
   /**
    * Returns a future that fails with the given value
    * @param value
    */
-  public static exceptionally(value: Error) {
-    return new Future((_, reject) => reject(value));
+  public static exceptionally<K>(value: Error) {
+    const future = new Future<K>(() => {});
+    future.isRunning = false;
+    future.failureResult = value;
+    future.underLyingPromise = Promise.reject(value);
+    return future;
   }
 
   /**
    * Returns the first completed or failed. If this is cancelled, then all futures provided will also be cancelled
    * @param futures list of futures
-   * @param signal optinal abort signal
+   * @param signal optional abort signal
    */
   public static firstCompleted<T extends Array<Future<any>>>(
     futures: T,
@@ -289,7 +298,7 @@ export class Future<T> {
    * Checks if the future failed
    */
   get failed() {
-    return this.error instanceof Error;
+    return this.error !== undefined && this.error instanceof Error;
   }
 
   /**
@@ -382,7 +391,7 @@ export class Future<T> {
         .registerSignal(this.defaultSignal);
       this.signals.forEach((signal) => newFuture.registerSignal(signal));
       return newFuture as Future<InferredFutureResult<K>>;
-    } else if (this.done) {
+    } else if (this.done || this.failed) {
       const newFuture = Future.wrap(this.underLyingPromise).thenApply(callback as any);
       return newFuture as Future<InferredFutureResult<K>>;
     }
@@ -504,21 +513,17 @@ export class Future<T> {
         const resolver = (v: any) => {
           if (v instanceof Promise) {
             v.then((v) => {
-              this.fulfilled = true;
               resolve(v);
             }).catch(reject);
           } else if (v instanceof Future) {
             v.run()
               .then((v) => {
-                this.fulfilled = true;
                 resolve(v);
               })
               .catch(reject);
           } else if (v instanceof FutureResult) {
-            this.fulfilled = true;
             resolve(v.value);
           } else {
-            this.fulfilled = true;
             resolve(v);
           }
         };
@@ -555,7 +560,6 @@ export class Future<T> {
           result
             .then(() => {
               if (!this.fulfilled) {
-                this.fulfilled = true;
                 resolve(null as any);
               }
             })
@@ -566,10 +570,13 @@ export class Future<T> {
       .then((v) => {
         this.completedResult = v;
         onFulfilled?.(v);
+        this.isRunning = false;
+        this.fulfilled = true;
         return v;
       })
       .catch((e) => {
         this.failureResult = e instanceof Error ? e : new Error(String(e));
+        this.isRunning = false;
         throw this.failureResult;
       })
       .finally(() => {
@@ -582,7 +589,6 @@ export class Future<T> {
       })
       .finally(() => {
         this.signals = new Set();
-        this.isRunning = false;
       });
 
     return this.underLyingPromise;
