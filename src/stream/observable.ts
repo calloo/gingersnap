@@ -3,6 +3,7 @@ import { Future, WaitPeriod } from "../future";
 import { Queue } from "../data-structures/object";
 import { Signal } from "../data/signal";
 import { Sign } from "node:crypto";
+import { time } from "node:console";
 
 /**
  * Provides a Publisher-Subscriber service around an event stream
@@ -57,6 +58,39 @@ export abstract class Observable<T> {
     return Future.waitFor(this.subscribe(replyTopic, 2).future, timeout).thenApply(
       ({ value }) => value.data
     ) as Future<T>;
+  }
+
+  /**
+   * Provides a Request-Multiple-Reply model by sending data over the given topic, and
+   * stream responses from the second topic provided. If you cancel the reply stream, a cancellation message
+   * can be sent via the cancellationTopic
+   * @param reqTopic request topic
+   * @param replyTopic reply topic which will be used to form the reply stream
+   * @param data request data
+   * @param cancellationTopic topic used to send a message if the stream is cancelled
+   * @param cancellationData cancellation message
+   * @param bufferSize max reply stream message buffer size
+   * @param timeout
+   */
+  requestStream(
+    reqTopic: string,
+    replyTopic: string,
+    data: T,
+    cancellationTopic?: string,
+    cancellationData?: T,
+    bufferSize: number = 100,
+    timeout: WaitPeriod = { seconds: 15 }
+  ): Stream<T> {
+    this.publish(reqTopic, data);
+    const stream = this.subscribe(replyTopic, bufferSize);
+    return stream
+      .waitFirstFor(timeout)
+      .map(({ data }) => data)
+      .onCancellation(() => {
+        if (cancellationTopic) {
+          this.publish(cancellationTopic, cancellationData);
+        }
+      }) as Stream<T>;
   }
 }
 

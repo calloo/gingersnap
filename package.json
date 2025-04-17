@@ -1,11 +1,11 @@
 {
   "name": "gingersnap",
-  "version": "0.23.1",
+  "version": "0.23.2",
   "description": "A general purpose library built with the aim of filling the gaps of javascript shortcomings",
   "main": "index.js",
   "scripts": {
     "build": "rollup -c",
-    "publish": "cd lib && npm publish",
+    "publish": "cp README.md lib && cd lib && npm publish",
     "lint": "eslint",
     "test": "NODE_OPTIONS=--unhandled-rejections=warn jest",
     "test:win": "set NODE_OPTIONS=--unhandled-rejections=warn && jest",
