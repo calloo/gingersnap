@@ -4,6 +4,7 @@ import * as R from "ramda";
 import { Collectors } from "../../../src/stream/collector";
 import { Future } from "../../../src/future";
 import { FutureEvent } from "../../../src/synchronize";
+import { TimeoutError } from "../../../src/errors";
 
 interface Name {
   firstName: string;
@@ -57,5 +58,31 @@ describe("Stream", () => {
     expect(firstDone).toEqual(evt);
     const results = await stream;
     expect(results).toEqual([1, 2, 3]);
+  });
+
+  it("should wait for first upstream data", async () => {
+    const stream = Future.sleep({ seconds: 1 }).thenApply(() => 5).stream;
+    const result = stream.waitFirstFor({ milliseconds: 100 }).head().future;
+    await expect(result).rejects.toEqual(new TimeoutError());
+
+    const stream2 = Future.sleep({ seconds: 1 }).thenApply(() => 5).stream;
+    const result2 = stream2.waitFirstFor({ seconds: 2 }).head().future;
+    await expect(result2).resolves.toEqual(5);
+  });
+
+  it("should wait for all upstream data", async () => {
+    const stream = Stream.merge([
+      Future.sleep({ seconds: 1 }).thenApply(() => 5).stream,
+      Future.sleep({ milliseconds: 100 }).thenApply(() => 15).stream,
+    ]);
+    const result = stream.waitFor({ milliseconds: 200 }).collect(Collectors.asList());
+    await expect(result).rejects.toEqual(new TimeoutError());
+
+    const stream2 = Stream.merge([
+      Future.sleep({ milliseconds: 110 }).thenApply(() => 5).stream,
+      Future.sleep({ milliseconds: 100 }).thenApply(() => 15).stream,
+    ]);
+    const result2 = stream2.waitFor({ milliseconds: 200 }).collect(Collectors.asList());
+    await expect(result2).resolves.toEqual([15, 5]);
   });
 });

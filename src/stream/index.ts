@@ -294,6 +294,43 @@ export class Stream<T> implements AsyncGenerator<T> {
     return this;
   }
 
+  /**
+   * Waits at most 'period' time for the data upstream to be received, otherwise will cancel the stream
+   * @param period
+   */
+  waitFor(period: WaitPeriod): Stream<T> {
+    const action = () => Future.waitFor(this.internalNext(), period);
+
+    return new Stream<T>(async (signal) => {
+      return action()
+        .registerSignal(signal)
+        .thenApply(({ value }) => new ExecutorState(value.done, value.value));
+    });
+  }
+
+  /**
+   * Waits at most 'period' time for the first data upstream to be received, otherwise will cancel the stream
+   * @param period
+   */
+  waitFirstFor(period: WaitPeriod): Stream<T> {
+    let i = 0;
+    const actions = [
+      () =>
+        Future.waitFor(this.internalNext(), period).thenApply(({ value }) => {
+          i = 1;
+          return value;
+        }),
+      () => this.internalNext(),
+    ];
+
+    return new Stream<T>(async (signal) => {
+      const action = actions[i];
+      return action()
+        .registerSignal(signal)
+        .thenApply(({ value }) => new ExecutorState(value.done, value.value));
+    });
+  }
+
   parallel(concurrentlyLimit: number = 3) {
     if (concurrentlyLimit < 1) {
       throw new IllegalOperationError("Cannot start parallel stream less than 2");
