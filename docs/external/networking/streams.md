@@ -208,9 +208,12 @@ for await (let record of Stream.asCompleted([postFuture, userFuture])) {
 ## Collecting stream
 Rather than looping over the stream to store the data in an array, you can collect all of the results into an array.
 This method returns a future
+
 ```ts
 // Post[] - list of all the posts
-const posts = await postStream.flatten().collect();
+import { Collectors } from "gingersnap/stream/collector";
+
+const posts = await postStream.flatten().collect(Collectors.asList());
 ```
 
 ## Consuming stream

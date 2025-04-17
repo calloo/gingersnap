@@ -63,6 +63,13 @@ export default {
         ]
       },
       {
+        text: 'Data',
+        collapsed: false,
+        items: [
+          {text: 'Decoders', link: '/data/decoders'},
+        ]
+      },
+      {
         text: 'Synchronization',
         collapsed: true,
         items: [
