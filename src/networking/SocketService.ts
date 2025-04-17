@@ -123,7 +123,7 @@ export class WebSocketService extends NetworkService {
               }
 
               data = R.set(lens, guid, data);
-              await this.socket.send(JSON.stringify(data));
+              await this.socket.sendNow(JSON.stringify(data));
               return 1;
             })
           )
@@ -159,11 +159,11 @@ export class WebSocketService extends NetworkService {
             }
 
             if (body instanceof Model) {
-              await this.socket.send(body.blob());
+              await this.socket.sendNow(body.blob());
             } else if (body instanceof ArrayBuffer || body instanceof Blob) {
-              await this.socket.send(body);
+              await this.socket.sendNow(body);
             } else {
-              await this.socket.send(JSON.stringify(body));
+              await this.socket.sendNow(JSON.stringify(body));
             }
             const result = oldMethod();
             if (result instanceof Promise) {

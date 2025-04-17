@@ -1,13 +1,14 @@
 import { AbortError, FutureCancelled, NetworkError } from "./errors";
 import { HTTPStatus } from "./networking/decorators";
 import { Stream } from "./stream";
-import { Future, WaitPeriod } from "./future";
+import { Future, FutureResult, WaitPeriod } from "./future";
 import { Decoder } from "./data/decoders";
 import { FutureEvent, Lock } from "./synchronize";
 import { ExecutorState } from "./stream/state";
 import WebSocket from "modern-isomorphic-ws";
 import { Queue } from "./data-structures/object";
 import { Pair, pair } from "./data-structures/array/Pair";
+import { ContextManager } from "./managers";
 
 type SocketFunctor<T extends CloseEvent | Event | MessageEvent> = (this: WebSocket, evt: T) => any;
 
@@ -22,7 +23,7 @@ interface WebSocketConfiguration {
 /**
  * Future-based web sockets
  */
-export class StreamableWebSocket<T> {
+export class StreamableWebSocket<T> implements ContextManager<Stream<T>> {
   private readonly retryOnDisconnect: boolean;
 
   private openFuture?: Future<void>;
@@ -202,13 +203,29 @@ export class StreamableWebSocket<T> {
   }
 
   /**
-   * Sends data via socket
+   * Sends data via socket as soon as possible
    * @param data
    */
-  async send(data: string | ArrayBufferView | Blob | ArrayBufferLike) {
+  async sendNow(data: string | ArrayBufferView | Blob | ArrayBufferLike) {
     this.getSocket()?.send(data instanceof Blob ? await data.arrayBuffer() : data);
   }
 
+  /**
+   * Sends data via socket, awaiting socket connection if currently disconnected
+   * @param data
+   */
+  send(data: string | ArrayBufferView | Blob | ArrayBufferLike): Future<void> {
+    return this.open().thenApply(async () =>
+      this.getSocket()?.send(data instanceof Blob ? await data.arrayBuffer() : data)
+    );
+  }
+
+  /**
+   * Gets a stream of messages that match the given filter provided
+   * @param lens filter function to select specific messages
+   * @param objectMaxSize max messages to buffer if reading from this stream is slower than messages coming in
+   * @param expiryPeriod how long to store buffered messages if not read
+   */
   streamView(lens: (v: T) => boolean, objectMaxSize?: number, expiryPeriod?: WaitPeriod): Stream<T> {
     const queue = new Queue<T>(objectMaxSize, expiryPeriod);
     const tuple = pair(queue, lens);
@@ -246,6 +263,21 @@ export class StreamableWebSocket<T> {
       .onCompletion(() => {
         this.messageQueues = this.messageQueues.filter((v) => v !== queue);
       });
+  }
+
+  with(functor: (value: FutureResult<Stream<T>>) => any): Future<void> {
+    return Future.of<void>(async (_, __, signal) => {
+      const stream = this.stream().buffer(this.cacheSize);
+      await this.open().registerSignal(signal);
+      try {
+        functor(new FutureResult(stream, signal));
+      } finally {
+        if (!this.closed) {
+          this.close();
+        }
+        stream.cancel();
+      }
+    }).schedule();
   }
 
   private addEventListener<T extends CloseEvent | Event | MessageEvent>(
